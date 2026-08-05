@@ -6,7 +6,11 @@ import Image from "next/image";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useState, useTransition, useRef, useEffect, type ReactNode, type FormEvent } from "react";
 import { ArrowRight, Check, ChevronDown, Sparkles } from "lucide-react";
-import { signInWithUsername, signUpWithEmail, sendSignupOtp } from "@/features/auth/actions";
+import {
+  completeSignupWithOtp,
+  signInWithUsername,
+  sendSignupOtp,
+} from "@/features/auth/actions";
 
 type AuthMode = "signin" | "signup";
 
@@ -65,36 +69,44 @@ export default function AuthSectionOne() {
     formData.set("redirect", redirect);
 
     startTransition(async () => {
-      if (isSignUp && !otpStep) {
-        const email = (formData.get("email") as string)?.trim();
-        const result = await sendSignupOtp(formData);
-        if (result.error) {
+      try {
+        if (isSignUp && !otpStep) {
+          const email = (formData.get("email") as string)?.trim();
+          const result = await sendSignupOtp(formData);
+          if (result.error) {
+            setError(result.error);
+            return;
+          }
+          setSignupEmail(email);
+          setOtpStep(true);
+          setMessage(result.message ?? "Verification code sent.");
+          return;
+        }
+
+        const result = isSignUp
+          ? await completeSignupWithOtp(formData)
+          : await signInWithUsername(formData);
+
+        if (result?.error) {
           setError(result.error);
           return;
         }
-        setSignupEmail(email);
-        setOtpStep(true);
-        setMessage(result.message ?? "Verification code sent.");
-        return;
-      }
 
-      const result = isSignUp
-        ? await signUpWithEmail(formData)
-        : await signInWithUsername(formData);
+        if (result?.message) {
+          setMessage(result.message);
+          if (result.success && result.redirectTo) {
+            router.push(result.redirectTo);
+            router.refresh();
+          }
+          return;
+        }
 
-      if (result.error) {
-        setError(result.error);
-        return;
-      }
-
-      if (result.message) {
-        setMessage(result.message);
-        return;
-      }
-
-      if (result.success && result.redirectTo) {
-        router.push(result.redirectTo);
-        router.refresh();
+        if (result?.success && result.redirectTo) {
+          router.push(result.redirectTo);
+          router.refresh();
+        }
+      } catch {
+        setError("Verification failed. Please check your code or request a new one.");
       }
     });
   }

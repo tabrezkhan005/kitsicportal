@@ -4,6 +4,12 @@ import { type NextRequest, NextResponse } from "next/server";
 const publicRoutes = ["/login", "/signup", "/auth/callback", "/auth/confirm"];
 
 export async function middleware(request: NextRequest) {
+  // Allow Next.js server actions (POST with Next-Action header) through without redirects
+  if (request.method === "POST" && request.headers.has("next-action")) {
+    const { supabaseResponse } = await updateSession(request);
+    return supabaseResponse;
+  }
+
   const { supabaseResponse, user } = await updateSession(request);
   const { pathname } = request.nextUrl;
 

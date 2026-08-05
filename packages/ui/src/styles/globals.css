@@ -1,0 +1,77 @@
+@import url("https://api.fontshare.com/v2/css?f[]=general-sans@400,500,600,700&display=swap");
+@import "tailwindcss";
+
+:root {
+  --primary: #033565;
+  --primary-foreground: #fefefe;
+  --secondary: #044a8a;
+  --secondary-foreground: #fefefe;
+  --accent: #faa109;
+  --accent-foreground: #033565;
+  --background: #fefefe;
+  --foreground: #033565;
+  --surface: #fefefe;
+  --muted: #5a7290;
+  --muted-foreground: #5a7290;
+  --border: #dde5ee;
+  --success: #044a8a;
+  --warning: #faa109;
+  --danger: #dc2626;
+  --ring: #033565;
+  --chart-1: #033565;
+  --chart-2: #faa109;
+  --chart-3: #044a8a;
+  --chart-4: #5a7290;
+  --chart-5: #5a7290;
+  --radius: 12px;
+  --radius-lg: 16px;
+  --radius-xl: 18px;
+}
+
+@theme inline {
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-surface: var(--surface);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-border: var(--border);
+  --color-success: var(--success);
+  --color-warning: var(--warning);
+  --color-danger: var(--danger);
+  --color-ring: var(--ring);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+  --font-sans: "General Sans", "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, monospace;
+  --radius-sm: 8px;
+  --radius-md: var(--radius);
+  --radius-lg: var(--radius-lg);
+  --radius-xl: var(--radius-xl);
+  --shadow-card: 0 1px 3px rgba(3, 53, 101, 0.06), 0 4px 12px rgba(3, 53, 101, 0.04);
+  --shadow-elevated: 0 4px 16px rgba(3, 53, 101, 0.08), 0 12px 32px rgba(3, 53, 101, 0.06);
+}
+
+* {
+  border-color: var(--border);
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+::selection {
+  background: color-mix(in srgb, var(--accent) 35%, transparent);
+}

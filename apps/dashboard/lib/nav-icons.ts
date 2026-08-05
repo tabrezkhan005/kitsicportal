@@ -1,0 +1,55 @@
+import {
+  LayoutDashboard,
+  BarChart3,
+  Calendar,
+  CheckSquare,
+  Kanban,
+  PenTool,
+  Users,
+  FolderKanban,
+  CalendarDays,
+  Video,
+  UserCheck,
+  Wallet,
+  Package,
+  Megaphone,
+  FileText,
+  Settings,
+  Shield,
+  Bell,
+  User,
+  GraduationCap,
+  BookOpen,
+  Mail,
+  type LucideIcon,
+} from "lucide-react";
+
+const iconMap: Record<string, LucideIcon> = {
+  "layout-dashboard": LayoutDashboard,
+  "bar-chart-3": BarChart3,
+  calendar: Calendar,
+  "check-square": CheckSquare,
+  "layout-kanban": Kanban,
+  "pen-tool": PenTool,
+  users: Users,
+  "folder-kanban": FolderKanban,
+  "calendar-days": CalendarDays,
+  video: Video,
+  "user-check": UserCheck,
+  wallet: Wallet,
+  package: Package,
+  megaphone: Megaphone,
+  "file-text": FileText,
+  settings: Settings,
+  shield: Shield,
+  bell: Bell,
+  user: User,
+  "graduation-cap": GraduationCap,
+  "book-open": BookOpen,
+  mail: Mail,
+};
+
+export function getNavIcon(name: string | null): LucideIcon {
+  if (!name) return LayoutDashboard;
+  return iconMap[name] ?? LayoutDashboard;
+}

@@ -2,25 +2,33 @@
   "name": "login-kitsic",
   "version": "0.1.0",
   "private": true,
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
   "scripts": {
-    "dev": "next dev",
-    "build": "next build",
-    "start": "next start",
-    "lint": "eslint"
-  },
-  "dependencies": {
-    "next": "16.2.9",
-    "react": "19.2.4",
-    "react-dom": "19.2.4"
+    "dev": "turbo dev",
+    "build": "turbo build",
+    "lint": "turbo lint",
+    "test": "turbo test",
+    "db:generate": "npm run generate --workspace=@kitsic/database",
+    "db:migrate": "npm run migrate --workspace=@kitsic/database",
+    "db:migrate:core": "npm run migrate:core --workspace=@kitsic/database",
+    "db:migrate:boards": "npm run migrate:boards --workspace=@kitsic/database",
+    "db:migrate:platform": "npm run migrate:platform --workspace=@kitsic/database",
+    "db:migrate:storage": "npm run migrate:storage --workspace=@kitsic/database",
+    "db:migrate:member-ids": "npm run migrate:member-ids --workspace=@kitsic/database",
+    "db:seed": "npm run seed --workspace=@kitsic/database",
+    "db:seed:demo": "npm run seed:demo --workspace=@kitsic/database",
+    "db:seed:modules": "npm run seed:modules --workspace=@kitsic/database",
+    "db:seed:extended": "npm run seed:extended --workspace=@kitsic/database"
   },
   "devDependencies": {
-    "@tailwindcss/postcss": "^4",
-    "@types/node": "^20",
-    "@types/react": "^19",
-    "@types/react-dom": "^19",
-    "eslint": "^9",
-    "eslint-config-next": "16.2.9",
-    "tailwindcss": "^4",
+    "turbo": "^2.5.4",
     "typescript": "^5"
-  }
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "packageManager": "npm@11.7.0"
 }

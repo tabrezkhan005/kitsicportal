@@ -3,6 +3,13 @@ import { type NextRequest, NextResponse } from "next/server";
 
 const publicRoutes = ["/login", "/signup", "/auth/callback", "/auth/confirm"];
 
+function isPublicPath(pathname: string) {
+  if (publicRoutes.some((route) => pathname.startsWith(route))) return true;
+  if (pathname.startsWith("/api/auth")) return true;
+  if (pathname.startsWith("/api/health")) return true;
+  return false;
+}
+
 export async function middleware(request: NextRequest) {
   // Allow Next.js server actions (POST with Next-Action header) through without redirects
   if (request.method === "POST" && request.headers.has("next-action")) {
@@ -13,9 +20,7 @@ export async function middleware(request: NextRequest) {
   const { supabaseResponse, user } = await updateSession(request);
   const { pathname } = request.nextUrl;
 
-  const isPublicRoute = publicRoutes.some((route) =>
-    pathname.startsWith(route),
-  );
+  const isPublicRoute = isPublicPath(pathname);
 
   if (!user && !isPublicRoute) {
     const url = request.nextUrl.clone();

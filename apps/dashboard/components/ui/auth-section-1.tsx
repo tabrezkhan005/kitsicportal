@@ -7,11 +7,30 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useState, useTransition, useRef, useEffect, type ReactNode, type FormEvent } from "react";
 import { ArrowRight, Check, ChevronDown, Sparkles } from "lucide-react";
 import {
-  completeSignupWithOtp,
   signInWithUsername,
   sendSignupOtp,
 } from "@/features/auth/actions";
 import { toActionErrorMessage } from "@/lib/action-error";
+
+async function completeSignupViaApi(formData: FormData) {
+  const response = await fetch("/api/auth/complete-signup", {
+    method: "POST",
+    body: formData,
+  });
+
+  let payload: { error?: string; success?: boolean; redirectTo?: string; message?: string } | null = null;
+  try {
+    payload = await response.json();
+  } catch {
+    return { error: "Signup server returned an invalid response. Redeploy the app and try again." };
+  }
+
+  if (!response.ok) {
+    return { error: payload?.error ?? `Signup failed (HTTP ${response.status}).` };
+  }
+
+  return payload ?? { error: "Signup failed with no response." };
+}
 
 type AuthMode = "signin" | "signup";
 
@@ -85,7 +104,7 @@ export default function AuthSectionOne() {
         }
 
         const result = isSignUp
-          ? await completeSignupWithOtp(formData)
+          ? await completeSignupViaApi(formData)
           : await signInWithUsername(formData);
 
         if (!result) {

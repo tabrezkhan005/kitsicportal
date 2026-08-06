@@ -15,6 +15,10 @@ interface AuthResult {
   otpSent?: boolean;
 }
 
+function authFail(error: unknown, fallback: string): AuthResult {
+  return { error: toActionErrorMessage(error, fallback) };
+}
+
 async function resolveUsernameToEmail(username: string): Promise<string | null> {
   const trimmed = username.trim();
   if (!trimmed) return null;
@@ -287,7 +291,13 @@ export async function completeSignupWithOtp(formData: FormData): Promise<AuthRes
       ) {
         return recoverExistingSignupUser(email, password, profile);
       }
-      return { error: toActionErrorMessage(createError, "Could not create account. Please try again.") };
+      if (message.includes("database error")) {
+        return authFail(
+          createError,
+          "Account could not be saved in the database. Ensure Supabase migrations are applied (npm run db:migrate:platform).",
+        );
+      }
+      return authFail(createError, "Could not create account. Please try again.");
     }
 
     const userId = createData.user?.id;
@@ -327,12 +337,12 @@ export async function completeSignupWithOtp(formData: FormData): Promise<AuthRes
     console.error("completeSignupWithOtp:", err);
     const message = toActionErrorMessage(err, "");
     if (message.includes("email_otps") || message.includes("does not exist")) {
-      return { error: "Database not ready. Contact support or try again later." };
+      return authFail(err, "Database not ready. Run platform migrations on Supabase.");
     }
     if (message.includes("SUPABASE_SERVICE_ROLE_KEY")) {
-      return { error: "Server configuration error. Contact the club admin." };
+      return authFail(err, "Server is missing SUPABASE_SERVICE_ROLE_KEY. Add it in Vercel environment variables.");
     }
-    return { error: message || "Verification failed. Please try again." };
+    return authFail(err, message || "Verification failed. Please try again.");
   }
 }
 

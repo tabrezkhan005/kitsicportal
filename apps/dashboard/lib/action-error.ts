@@ -13,11 +13,22 @@ export function toActionErrorMessage(value: unknown, fallback = "Something went 
     if (typeof record.message === "string" && record.message.trim()) {
       return record.message.trim();
     }
+    if (typeof record.msg === "string" && record.msg.trim()) {
+      return record.msg.trim();
+    }
     if (typeof record.error === "string" && record.error.trim()) {
       return record.error.trim();
     }
     if (typeof record.error_description === "string" && record.error_description.trim()) {
       return record.error_description.trim();
+    }
+    if (typeof record.code === "string" && record.code.trim()) {
+      return record.code.trim();
+    }
+
+    for (const nested of Object.values(record)) {
+      const nestedMessage = toActionErrorMessage(nested, "");
+      if (nestedMessage) return nestedMessage;
     }
   }
 

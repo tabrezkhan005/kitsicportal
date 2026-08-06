@@ -88,8 +88,22 @@ export default function AuthSectionOne() {
           ? await completeSignupWithOtp(formData)
           : await signInWithUsername(formData);
 
-        if (result?.error) {
-          setError(toActionErrorMessage(result.error, "Authentication failed. Please try again."));
+        if (!result) {
+          setError(
+            isSignUp
+              ? "Signup request failed. Redeploy the app and confirm SUPABASE_SERVICE_ROLE_KEY is set on Vercel."
+              : "Sign-in request failed. Please try again.",
+          );
+          return;
+        }
+
+        if (result.error) {
+          setError(toActionErrorMessage(
+            result.error,
+            isSignUp
+              ? "Signup failed. Check Supabase + Vercel env vars (service role key required)."
+              : "Sign-in failed. Check your username and password.",
+          ));
           return;
         }
 

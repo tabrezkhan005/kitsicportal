@@ -3,6 +3,7 @@
 import { createServerClient } from "@kitsic/auth";
 import { createAdminClient, logAuditEvent } from "@kitsic/database";
 import { headers } from "next/headers";
+import { getPayloadString, toActionErrorMessage } from "@/lib/action-error";
 import { sendOtpEmail } from "@/lib/email";
 import { storeOtp, verifyOtp } from "@/lib/otp";
 
@@ -130,6 +131,79 @@ export async function signInWithEmail(formData: FormData): Promise<AuthResult> {
   return { success: true, redirectTo };
 }
 
+async function findAuthUserByEmail(email: string) {
+  const admin = createAdminClient();
+  let page = 1;
+
+  while (page <= 10) {
+    const { data, error } = await admin.auth.admin.listUsers({ page, perPage: 200 });
+    if (error || !data.users.length) return null;
+
+    const match = data.users.find((user) => user.email?.toLowerCase() === email);
+    if (match) return match;
+
+    if (data.users.length < 200) break;
+    page += 1;
+  }
+
+  return null;
+}
+
+async function signInAfterSignup(email: string, password: string): Promise<AuthResult> {
+  const supabase = await createServerClient();
+  const { error: signInError } = await supabase.auth.signInWithPassword({ email, password });
+
+  if (!signInError) {
+    return { success: true, redirectTo: "/" };
+  }
+
+  return {
+    success: true,
+    redirectTo: "/login",
+    message: "Account created! Sign in with your roll number or email.",
+  };
+}
+
+async function recoverExistingSignupUser(
+  email: string,
+  password: string,
+  profile: { fullName: string; rollNumber: string; branch: string; phone: string },
+): Promise<AuthResult> {
+  const admin = createAdminClient();
+  const existing = await findAuthUserByEmail(email);
+
+  if (!existing) {
+    return { error: "An account with this email already exists. Try signing in." };
+  }
+
+  const { error: updateError } = await admin.auth.admin.updateUserById(existing.id, {
+    password,
+    email_confirm: true,
+    user_metadata: {
+      full_name: profile.fullName,
+      roll_number: profile.rollNumber,
+      branch: profile.branch,
+      phone: profile.phone,
+    },
+  });
+
+  if (updateError) {
+    return { error: toActionErrorMessage(updateError, "Could not finish account setup. Try signing in.") };
+  }
+
+  await admin.from("users").upsert({
+    id: existing.id,
+    email,
+    full_name: profile.fullName,
+    phone: profile.phone,
+    roll_number: profile.rollNumber,
+    branch: profile.branch,
+    bio: `Roll No: ${profile.rollNumber} · ${profile.branch}`,
+  }, { onConflict: "id" });
+
+  return signInAfterSignup(email, password);
+}
+
 export async function sendSignupOtp(formData: FormData): Promise<AuthResult> {
   const fullName = (formData.get("full_name") as string)?.trim();
   const email = (formData.get("email") as string)?.trim().toLowerCase();
@@ -164,7 +238,7 @@ export async function sendSignupOtp(formData: FormData): Promise<AuthResult> {
     }
     return { success: true, otpSent: true, message: "Verification code sent to your email." };
   } catch (error) {
-    return { error: error instanceof Error ? error.message : "Could not send OTP." };
+    return { error: toActionErrorMessage(error, "Could not send OTP.") };
   }
 }
 
@@ -177,84 +251,86 @@ export async function completeSignupWithOtp(formData: FormData): Promise<AuthRes
     const verified = await verifyOtp(email, otp);
     if (!verified.ok) return { error: verified.error };
 
-    const { fullName, branch, rollNumber, phone, password } = verified.payload;
-    if (!fullName || !password) return { error: "Signup session expired. Please start again." };
+    const payload = verified.payload;
+    const fullName = getPayloadString(payload, "fullName", "full_name");
+    const branch = getPayloadString(payload, "branch");
+    const rollNumber = getPayloadString(payload, "rollNumber", "roll_number");
+    const phone = getPayloadString(payload, "phone");
+    const password = getPayloadString(payload, "password");
 
-    const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
-    const supabase = await createServerClient();
+    if (!fullName || !password) {
+      return { error: "Signup session expired. Request a new verification code and try again." };
+    }
 
-    const { data, error } = await supabase.auth.signUp({
+    const profile = { fullName, rollNumber, branch, phone };
+    const admin = createAdminClient();
+
+    const { data: createData, error: createError } = await admin.auth.admin.createUser({
       email,
       password,
-      options: {
-        data: {
-          full_name: fullName,
-          roll_number: rollNumber,
-          branch,
-          phone,
-        },
-        emailRedirectTo: `${appUrl}/auth/callback`,
+      email_confirm: true,
+      user_metadata: {
+        full_name: fullName,
+        roll_number: rollNumber,
+        branch,
+        phone,
       },
     });
 
-    if (error) {
-      const message = error.message?.trim();
-      if (message.toLowerCase().includes("already registered")) {
-        return { error: "An account with this email already exists. Try signing in." };
+    if (createError) {
+      const message = createError.message?.toLowerCase() ?? "";
+      if (
+        message.includes("already")
+        || message.includes("registered")
+        || message.includes("exists")
+        || createError.status === 422
+      ) {
+        return recoverExistingSignupUser(email, password, profile);
       }
-      return { error: message || "Could not create account. Please try again." };
+      return { error: toActionErrorMessage(createError, "Could not create account. Please try again.") };
     }
 
-    if (data.user) {
-      const admin = createAdminClient();
-      const { error: profileError } = await admin.from("users").update({
-        full_name: fullName,
-        phone,
-        roll_number: rollNumber,
-        branch,
-        bio: `Roll No: ${rollNumber} · ${branch}`,
-      }).eq("id", data.user.id);
-
-      if (profileError) {
-        console.error("Profile update failed:", profileError.message);
-      }
-
-      try {
-        const headerList = await headers();
-        await logAuditEvent({
-          userId: data.user.id,
-          action: "auth.sign_up",
-          entityType: "user",
-          entityId: data.user.id,
-          newValue: { email, rollNumber, branch },
-          ipAddress: headerList.get("x-forwarded-for"),
-          userAgent: headerList.get("user-agent"),
-        });
-      } catch {
-        // Non-blocking — signup should still succeed
-      }
+    const userId = createData.user?.id;
+    if (!userId) {
+      return { error: "Account creation failed. Please try again." };
     }
 
-    if (data.session) {
-      return { success: true, redirectTo: "/" };
+    const { error: profileError } = await admin.from("users").update({
+      full_name: fullName,
+      phone,
+      roll_number: rollNumber,
+      branch,
+      bio: `Roll No: ${rollNumber} · ${branch}`,
+    }).eq("id", userId);
+
+    if (profileError) {
+      console.error("Profile update failed:", profileError.message);
     }
 
-    // Email confirmation off: sign in immediately so user lands in the dashboard
-    const { error: signInError } = await supabase.auth.signInWithPassword({ email, password });
-    if (!signInError) {
-      return { success: true, redirectTo: "/" };
+    try {
+      const headerList = await headers();
+      await logAuditEvent({
+        userId,
+        action: "auth.sign_up",
+        entityType: "user",
+        entityId: userId,
+        newValue: { email, rollNumber, branch },
+        ipAddress: headerList.get("x-forwarded-for"),
+        userAgent: headerList.get("user-agent"),
+      });
+    } catch {
+      // Non-blocking — signup should still succeed
     }
 
-    return {
-      success: true,
-      redirectTo: "/login",
-      message: "Account created! Sign in with your roll number or email.",
-    };
+    return signInAfterSignup(email, password);
   } catch (err) {
     console.error("completeSignupWithOtp:", err);
-    const message = err instanceof Error ? err.message : "";
+    const message = toActionErrorMessage(err, "");
     if (message.includes("email_otps") || message.includes("does not exist")) {
       return { error: "Database not ready. Contact support or try again later." };
+    }
+    if (message.includes("SUPABASE_SERVICE_ROLE_KEY")) {
+      return { error: "Server configuration error. Contact the club admin." };
     }
     return { error: message || "Verification failed. Please try again." };
   }

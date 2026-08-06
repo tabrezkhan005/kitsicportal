@@ -11,6 +11,7 @@ import {
   signInWithUsername,
   sendSignupOtp,
 } from "@/features/auth/actions";
+import { toActionErrorMessage } from "@/lib/action-error";
 
 type AuthMode = "signin" | "signup";
 
@@ -73,8 +74,8 @@ export default function AuthSectionOne() {
         if (isSignUp && !otpStep) {
           const email = (formData.get("email") as string)?.trim();
           const result = await sendSignupOtp(formData);
-          if (result.error) {
-            setError(result.error);
+          if (result?.error) {
+            setError(toActionErrorMessage(result.error, "Could not send verification code."));
             return;
           }
           setSignupEmail(email);
@@ -88,7 +89,7 @@ export default function AuthSectionOne() {
           : await signInWithUsername(formData);
 
         if (result?.error) {
-          setError(result.error);
+          setError(toActionErrorMessage(result.error, "Authentication failed. Please try again."));
           return;
         }
 
@@ -105,8 +106,8 @@ export default function AuthSectionOne() {
           router.push(result.redirectTo);
           router.refresh();
         }
-      } catch {
-        setError("Verification failed. Please check your code or request a new one.");
+      } catch (err) {
+        setError(toActionErrorMessage(err, "Verification failed. Please check your code or request a new one."));
       }
     });
   }

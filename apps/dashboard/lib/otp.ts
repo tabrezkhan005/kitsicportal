@@ -45,7 +45,7 @@ export async function verifyOtp(email: string, otp: string) {
   if (data.otp_hash !== hashOtp(otp)) return { ok: false as const, error: "Invalid verification code." };
 
   await supabase.from("email_otps").update({ verified: true }).eq("id", data.id);
-  return { ok: true as const, payload: data.payload as Record<string, string> };
+  return { ok: true as const, payload: (data.payload ?? {}) as Record<string, unknown> };
 }
 
 export async function generateMemberIdPreview() {

@@ -15,6 +15,12 @@ const nextConfig: NextConfig = {
     "@kitsic/hooks",
     "@excalidraw/excalidraw",
   ],
+  experimental: {
+    serverActions: {
+      // Avatars up to 5 MB; club documents up to 15 MB (see lib/storage.ts)
+      bodySizeLimit: "16mb",
+    },
+  },
 };
 
 export default nextConfig;

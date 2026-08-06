@@ -16,6 +16,9 @@ import {
 } from "@kitsic/ui";
 import { updateProfileExtended } from "@/lib/platform-actions";
 import { AVATAR_COLORS } from "@/lib/platform-constants";
+import { toActionErrorMessage } from "@/lib/action-error";
+
+const MAX_AVATAR_BYTES = 5 * 1024 * 1024;
 
 interface ProfileEditFormProps {
   fullName: string | null;
@@ -50,19 +53,45 @@ export function ProfileEditForm({
 }: ProfileEditFormProps) {
   const router = useRouter();
   const [previewUrl, setPreviewUrl] = useState<string | null>(avatarUrl);
+  const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
 
   function handleAvatarChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
-    if (file) setPreviewUrl(URL.createObjectURL(file));
+    if (!file) return;
+
+    if (file.size > MAX_AVATAR_BYTES) {
+      setError("Profile picture must be under 5 MB.");
+      e.target.value = "";
+      return;
+    }
+
+    setError(null);
+    setPreviewUrl(URL.createObjectURL(file));
   }
 
   function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
+    setError(null);
+
     const formData = new FormData(e.currentTarget);
+    const avatarFile = formData.get("avatar_file");
+    if (avatarFile instanceof File && avatarFile.size > MAX_AVATAR_BYTES) {
+      setError("Profile picture must be under 5 MB.");
+      return;
+    }
+
     startTransition(async () => {
-      await updateProfileExtended(formData);
-      router.refresh();
+      try {
+        const result = await updateProfileExtended(formData);
+        if (result?.error) {
+          setError(toActionErrorMessage(result.error, "Could not save profile."));
+          return;
+        }
+        router.refresh();
+      } catch (err) {
+        setError(toActionErrorMessage(err, "Could not save profile. Try a smaller image."));
+      }
     });
   }
 
@@ -128,6 +157,11 @@ export function ProfileEditForm({
             <Label htmlFor="skills">Skills (comma-separated)</Label>
             <Input id="skills" name="skills" defaultValue={skills.join(", ")} placeholder="React, Python, Public speaking" disabled={isPending} />
           </div>
+          {error && (
+            <p className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-600 font-body">
+              {error}
+            </p>
+          )}
           <Button type="submit" disabled={isPending} className="font-ui">
             {isPending ? "Saving…" : "Save changes"}
           </Button>

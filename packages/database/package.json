@@ -17,6 +17,7 @@
     "migrate:platform": "tsx src/migrate-platform.ts",
     "migrate:storage": "tsx src/migrate-storage.ts",
     "migrate:member-ids": "tsx src/migrate-member-ids.ts",
+    "migrate:signup-fix": "tsx src/migrate-signup-fix.ts",
     "seed": "tsx src/seed.ts",
     "seed:demo": "tsx src/seed-demo-users.ts",
     "seed:modules": "tsx src/seed-modules.ts",

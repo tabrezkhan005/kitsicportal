@@ -23,13 +23,14 @@ export async function storeOtp(email: string, payload: Record<string, unknown>) 
     otp_hash: hashOtp(otp),
     payload,
     expires_at: expiresAt,
+    verified: false,
   });
 
   if (error) throw new Error(error.message);
   return otp;
 }
 
-export async function verifyOtp(email: string, otp: string) {
+async function loadOtpRow(email: string) {
   const supabase = createAdminClient();
   const { data, error } = await supabase
     .from("email_otps")
@@ -40,12 +41,22 @@ export async function verifyOtp(email: string, otp: string) {
     .limit(1)
     .maybeSingle();
 
-  if (error || !data) return { ok: false as const, error: "No verification code found. Request a new one." };
+  if (error) throw new Error(error.message);
+  return data;
+}
+
+export async function verifyOtp(email: string, otp: string) {
+  const data = await loadOtpRow(email);
+  if (!data) return { ok: false as const, error: "No verification code found. Request a new one." };
   if (new Date(data.expires_at) < new Date()) return { ok: false as const, error: "Verification code expired." };
   if (data.otp_hash !== hashOtp(otp)) return { ok: false as const, error: "Invalid verification code." };
 
-  await supabase.from("email_otps").update({ verified: true }).eq("id", data.id);
-  return { ok: true as const, payload: (data.payload ?? {}) as Record<string, unknown> };
+  return { ok: true as const, otpId: data.id as string, payload: (data.payload ?? {}) as Record<string, unknown> };
+}
+
+export async function consumeOtp(otpId: string) {
+  const supabase = createAdminClient();
+  await supabase.from("email_otps").update({ verified: true }).eq("id", otpId);
 }
 
 export async function generateMemberIdPreview() {

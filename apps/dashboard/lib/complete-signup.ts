@@ -1,8 +1,9 @@
+import type { SupabaseClient } from "@supabase/supabase-js";
 import { createServerClient } from "@kitsic/auth";
 import { createAdminClient, logAuditEvent } from "@kitsic/database";
 import { headers } from "next/headers";
 import { getPayloadString, toActionErrorMessage } from "@/lib/action-error";
-import { verifyOtp } from "@/lib/otp";
+import { consumeOtp, verifyOtp } from "@/lib/otp";
 
 export interface SignupResult {
   error?: string;
@@ -13,6 +14,53 @@ export interface SignupResult {
 
 function fail(error: unknown, fallback: string): SignupResult {
   return { error: toActionErrorMessage(error, fallback) };
+}
+
+function formatAuthCreateError(error: { message?: string; status?: number; name?: string }) {
+  const message = error.message?.trim();
+  if (message && message !== "{}") return message;
+  if (error.status === 500) {
+    return "Database error while creating your account. The club admin must apply the signup database fix (run db:migrate:signup-fix in Supabase).";
+  }
+  return `Could not create account (HTTP ${error.status ?? "unknown"}).`;
+}
+
+async function ensureMemberProfile(
+  admin: SupabaseClient,
+  userId: string,
+  email: string,
+  profile: { fullName: string; rollNumber: string; branch: string; phone: string },
+) {
+  const { data: memberId, error: memberIdError } = await admin.rpc("generate_member_id");
+  if (memberIdError) throw new Error(`Could not assign member ID: ${memberIdError.message}`);
+
+  const { error: profileError } = await admin.from("users").upsert({
+    id: userId,
+    email,
+    full_name: profile.fullName,
+    phone: profile.phone,
+    roll_number: profile.rollNumber,
+    branch: profile.branch,
+    member_id: memberId,
+    avatar_color: "#033565",
+    bio: `Roll No: ${profile.rollNumber} · ${profile.branch}`,
+    skills: [],
+  }, { onConflict: "id" });
+
+  if (profileError) throw new Error(`Could not save profile: ${profileError.message}`);
+
+  const { data: memberRole } = await admin.from("roles").select("id").eq("slug", "member").maybeSingle();
+  if (!memberRole?.id) {
+    throw new Error("Member role is missing in the database. Run npm run db:seed.");
+  }
+
+  const { error: roleError } = await admin.from("user_roles").upsert(
+    { user_id: userId, role_id: memberRole.id },
+    { onConflict: "user_id,role_id" },
+  );
+  if (roleError) {
+    throw new Error(`Could not assign member role: ${roleError.message}`);
+  }
 }
 
 async function findAuthUserByEmail(email: string) {
@@ -44,7 +92,7 @@ async function signInAfterSignup(email: string, password: string): Promise<Signu
   return {
     success: true,
     redirectTo: "/login",
-    message: `Account created, but automatic sign-in failed: ${signInError.message}. Sign in manually.`,
+    message: `Account created! Sign in with your roll number or email. (${signInError.message})`,
   };
 }
 
@@ -75,24 +123,13 @@ async function recoverExistingSignupUser(
     return fail(updateError, `Could not finish account setup: ${updateError.message || "try signing in manually."}`);
   }
 
-  const { error: upsertError } = await admin.from("users").upsert({
-    id: existing.id,
-    email,
-    full_name: profile.fullName,
-    phone: profile.phone,
-    roll_number: profile.rollNumber,
-    branch: profile.branch,
-    bio: `Roll No: ${profile.rollNumber} · ${profile.branch}`,
-  }, { onConflict: "id" });
-
-  if (upsertError) {
-    console.error("Profile upsert failed:", upsertError.message);
-  }
-
+  await ensureMemberProfile(admin, existing.id, email, profile);
   return signInAfterSignup(email, password);
 }
 
 export async function runCompleteSignup(formData: FormData): Promise<SignupResult> {
+  let otpId: string | null = null;
+
   try {
     const email = (formData.get("email") as string)?.trim().toLowerCase();
     const otp = (formData.get("otp") as string)?.trim();
@@ -112,6 +149,7 @@ export async function runCompleteSignup(formData: FormData): Promise<SignupResul
       return { error: verified.error };
     }
 
+    otpId = verified.otpId;
     const payload = verified.payload;
     const fullName = getPayloadString(payload, "fullName", "full_name");
     const branch = getPayloadString(payload, "branch");
@@ -147,19 +185,12 @@ export async function runCompleteSignup(formData: FormData): Promise<SignupResul
         || message.includes("exists")
         || status === 422
       ) {
-        return recoverExistingSignupUser(email, password, profile);
+        const recovered = await recoverExistingSignupUser(email, password, profile);
+        if (!recovered.error && otpId) await consumeOtp(otpId);
+        return recovered;
       }
 
-      if (message.includes("database error")) {
-        return {
-          error: `Database error while creating account: ${createError.message}. Run Supabase migrations (db:migrate:platform).`,
-        };
-      }
-
-      return {
-        error: createError.message
-          || `Could not create account (status ${status}). Check Supabase Auth settings and migrations.`,
-      };
+      return { error: formatAuthCreateError(createError) };
     }
 
     const userId = createData.user?.id;
@@ -167,17 +198,7 @@ export async function runCompleteSignup(formData: FormData): Promise<SignupResul
       return { error: "Account creation failed: Supabase returned no user id." };
     }
 
-    const { error: profileError } = await admin.from("users").update({
-      full_name: fullName,
-      phone,
-      roll_number: rollNumber,
-      branch,
-      bio: `Roll No: ${rollNumber} · ${branch}`,
-    }).eq("id", userId);
-
-    if (profileError) {
-      console.error("Profile update failed:", profileError.message);
-    }
+    await ensureMemberProfile(admin, userId, email, profile);
 
     try {
       const headerList = await headers();
@@ -194,6 +215,7 @@ export async function runCompleteSignup(formData: FormData): Promise<SignupResul
       // Non-blocking
     }
 
+    if (otpId) await consumeOtp(otpId);
     return signInAfterSignup(email, password);
   } catch (err) {
     console.error("runCompleteSignup:", err);

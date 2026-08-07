@@ -2,12 +2,19 @@ import { createAdminClient } from "@kitsic/database";
 import { ForbiddenError, UnauthorizedError } from "@kitsic/utils";
 import type { NavItem, SessionUser } from "@kitsic/types";
 import { createClient } from "../clients/server";
+import { repairMemberAccess } from "../repair-member-access";
 
 export async function getSessionUser(): Promise<SessionUser | null> {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
 
   if (!user) return null;
+
+  await repairMemberAccess({
+    id: user.id,
+    email: user.email,
+    user_metadata: user.user_metadata as Record<string, unknown>,
+  });
 
   const admin = createAdminClient();
 

@@ -18,6 +18,7 @@
     "db:migrate:platform": "npm run migrate:platform --workspace=@kitsic/database",
     "db:migrate:storage": "npm run migrate:storage --workspace=@kitsic/database",
     "db:migrate:member-ids": "npm run migrate:member-ids --workspace=@kitsic/database",
+    "db:migrate:signup-fix": "npm run migrate:signup-fix --workspace=@kitsic/database",
     "db:seed": "npm run seed --workspace=@kitsic/database",
     "db:seed:demo": "npm run seed:demo --workspace=@kitsic/database",
     "db:seed:modules": "npm run seed:modules --workspace=@kitsic/database",

@@ -117,10 +117,10 @@ export default function AuthSectionOne() {
         }
 
         if (result.error) {
-          setError(toActionErrorMessage(
+          setError(typeof result.error === "string" ? result.error : toActionErrorMessage(
             result.error,
             isSignUp
-              ? "Signup failed. Check Supabase + Vercel env vars (service role key required)."
+              ? "Signup failed unexpectedly. Try again or request a new verification code."
               : "Sign-in failed. Check your username and password.",
           ));
           return;

@@ -15,17 +15,17 @@ import {
   Label,
 } from "@kitsic/ui";
 import { updateProfileExtended } from "@/lib/platform-actions";
-import { AVATAR_COLORS } from "@/lib/platform-constants";
+import { getAvatarColorForUser } from "@/lib/avatar-color";
 import { toActionErrorMessage } from "@/lib/action-error";
 
 const MAX_AVATAR_BYTES = 5 * 1024 * 1024;
 
 interface ProfileEditFormProps {
+  userId: string;
   fullName: string | null;
   email: string;
   phone: string | null;
   avatarUrl: string | null;
-  avatarColor: string;
   memberId: string | null;
   skills: string[];
 }
@@ -43,15 +43,16 @@ function getInitials(name: string | null, email: string) {
 }
 
 export function ProfileEditForm({
+  userId,
   fullName,
   email,
   phone,
   avatarUrl,
-  avatarColor,
   memberId,
   skills,
 }: ProfileEditFormProps) {
   const router = useRouter();
+  const avatarColor = getAvatarColorForUser(userId);
   const [previewUrl, setPreviewUrl] = useState<string | null>(avatarUrl);
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
@@ -139,18 +140,19 @@ export function ProfileEditForm({
             <Label htmlFor="phone">Phone</Label>
             <Input id="phone" name="phone" type="tel" defaultValue={phone ?? ""} disabled={isPending} />
           </div>
-          <div className="space-y-2">
-            <Label htmlFor="avatar_color">Avatar color</Label>
-            <div className="flex flex-wrap gap-2">
-              {AVATAR_COLORS.map((color) => (
-                <label key={color} className="cursor-pointer">
-                  <input type="radio" name="avatar_color" value={color} defaultChecked={avatarColor === color} className="sr-only peer" />
-                  <span
-                    className="block h-8 w-8 rounded-full border-2 border-transparent peer-checked:border-primary"
-                    style={{ backgroundColor: color }}
-                  />
-                </label>
-              ))}
+          <div className="rounded-xl border border-primary/10 bg-primary/3 px-3 py-2.5">
+            <p className="font-ui text-xs font-semibold text-primary">Your avatar badge</p>
+            <p className="mt-1 font-body text-xs text-primary/55">
+              Your initials color is assigned automatically and stays consistent across the club board, leaderboard, and whiteboard.
+            </p>
+            <div className="mt-2 flex items-center gap-2">
+              <span
+                className="inline-flex h-8 w-8 items-center justify-center rounded-full text-xs font-bold text-white font-ui"
+                style={{ backgroundColor: avatarColor }}
+              >
+                {getInitials(fullName, email)}
+              </span>
+              <span className="font-mono-brand text-[11px] text-primary/45">{avatarColor}</span>
             </div>
           </div>
           <div className="space-y-1.5">

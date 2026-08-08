@@ -394,7 +394,6 @@ export async function updateProfileExtended(formData: FormData): Promise<ActionR
 
   const fullName = (formData.get("full_name") as string)?.trim();
   let avatarUrl = (formData.get("avatar_url") as string)?.trim() || null;
-  const avatarColor = (formData.get("avatar_color") as string)?.trim() || "#033565";
   const phone = (formData.get("phone") as string)?.trim() || null;
   const skillsRaw = (formData.get("skills") as string)?.trim() ?? "";
   const skills = skillsRaw.split(",").map((s) => s.trim()).filter(Boolean).slice(0, 20);
@@ -409,7 +408,6 @@ export async function updateProfileExtended(formData: FormData): Promise<ActionR
   const { error } = await supabase.from("users").update({
     full_name: fullName || null,
     avatar_url: avatarUrl,
-    avatar_color: avatarColor,
     phone,
     skills,
   }).eq("id", user.id);

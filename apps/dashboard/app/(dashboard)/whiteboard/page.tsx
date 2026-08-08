@@ -34,7 +34,15 @@ export default async function WhiteboardPage() {
         title="Club Whiteboard"
         description="Draw, brainstorm, and plan together — like Excalidraw, shared with everyone"
       />
-      <ClubWhiteboard whiteboardId={whiteboard.id} initialScene={scene} />
+      <ClubWhiteboard
+        whiteboardId={whiteboard.id}
+        initialScene={scene}
+        currentUser={{
+          id: user.id,
+          fullName: user.fullName,
+          email: user.email,
+        }}
+      />
     </div>
   );
 }

@@ -19,9 +19,14 @@ const ExcalidrawWrapper = dynamic(
 interface ClubWhiteboardProps {
   whiteboardId: string;
   initialScene: string;
+  currentUser: {
+    id: string;
+    fullName: string | null;
+    email: string;
+  };
 }
 
-export function ClubWhiteboard({ whiteboardId, initialScene }: ClubWhiteboardProps) {
+export function ClubWhiteboard({ whiteboardId, initialScene, currentUser }: ClubWhiteboardProps) {
   const [isPending, startTransition] = useTransition();
   const [savedAt, setSavedAt] = useState<string | null>(null);
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -43,16 +48,16 @@ export function ClubWhiteboard({ whiteboardId, initialScene }: ClubWhiteboardPro
 
   return (
     <div className="space-y-3">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between gap-3">
         <p className="font-body text-sm text-primary/50">
-          Shared club whiteboard — all members can draw and plan together.
+          Shared club whiteboard — hover any stroke to see who drew it. Each member gets their own color.
         </p>
-        <p className="font-mono-brand text-xs text-primary/40">
+        <p className="font-mono-brand shrink-0 text-xs text-primary/40">
           {isPending ? "Saving…" : savedAt ? `Saved ${savedAt}` : "Auto-save enabled"}
         </p>
       </div>
       <div className="overflow-hidden rounded-xl border border-primary/10 bg-white shadow-sm">
-        <ExcalidrawWrapper initialScene={initialScene} onChange={handleChange} />
+        <ExcalidrawWrapper initialScene={initialScene} currentUser={currentUser} onChange={handleChange} />
       </div>
     </div>
   );

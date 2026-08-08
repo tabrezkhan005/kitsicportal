@@ -1,4 +1,5 @@
 import { createAdminClient } from "@kitsic/database";
+import { getAvatarColorForUser } from "@/lib/avatar-color";
 import { filterLeaderboardForViewer } from "@/lib/leaderboard-utils";
 import { getBoardCardStats, getTaskBoardFull } from "@/lib/board-data";
 
@@ -248,7 +249,7 @@ async function fetchMembersBase() {
       roleSlugs: roleData.slugs,
       member_id: user.member_id as string | null,
       skills: (user.skills as string[] | null) ?? [],
-      avatar_color: (user.avatar_color as string | null) ?? "#033565",
+      avatar_color: getAvatarColorForUser(user.id as string),
     };
   });
 }
@@ -486,7 +487,7 @@ export async function getLeaderboard() {
         id: m.id,
         full_name: m.full_name,
         avatar_url: m.avatar_url,
-        avatar_color: (m as { avatar_color?: string }).avatar_color ?? "#033565",
+        avatar_color: getAvatarColorForUser(m.id),
         member_id: (m as { member_id?: string | null }).member_id ?? null,
         roles: m.roles.filter((r): r is string => Boolean(r)),
         ...perf,

@@ -4,6 +4,15 @@ import type { NavItem, SessionUser } from "@kitsic/types";
 import { createClient } from "../clients/server";
 import { repairMemberAccess } from "../repair-member-access";
 
+function resolveAvatarColor(userId: string): string {
+  const palette = ["#033565", "#044a8a", "#5a7290", "#faa109", "#2d4a6f", "#1a3a5c"];
+  let hash = 0;
+  for (let i = 0; i < userId.length; i++) {
+    hash = userId.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  return palette[Math.abs(hash) % palette.length];
+}
+
 export async function getSessionUser(): Promise<SessionUser | null> {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
@@ -44,7 +53,7 @@ export async function getSessionUser(): Promise<SessionUser | null> {
     email: user.email ?? profile?.email ?? "",
     fullName: profile?.full_name ?? user.user_metadata?.full_name ?? null,
     avatarUrl: profile?.avatar_url ?? user.user_metadata?.avatar_url ?? null,
-    avatarColor: (profile?.avatar_color as string | null) ?? "#033565",
+    avatarColor: resolveAvatarColor(user.id),
     memberId: (profile?.member_id as string | null) ?? null,
     roles,
     permissions,

@@ -2,6 +2,7 @@ import { getSessionUser } from "@kitsic/auth";
 import { createAdminClient } from "@kitsic/database";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@kitsic/ui";
 import { getCertificates, getLeaderboardForViewer, getMemberPerformance } from "@/lib/data";
+import { getAvatarColorForUser } from "@/lib/avatar-color";
 import { PageHeader } from "@/components/page-header";
 import { UserAvatar } from "@/components/user-avatar";
 import { ProfileDashboard } from "@/features/profile/profile-dashboard";
@@ -21,7 +22,7 @@ export default async function ProfilePage() {
     getLeaderboardForViewer(user.id),
   ]);
 
-  const avatarColor = profile?.avatar_color ?? "#033565";
+  const avatarColor = getAvatarColorForUser(user.id);
   const skills = (profile?.skills as string[] | null) ?? [];
 
   return (
@@ -79,11 +80,11 @@ export default async function ProfilePage() {
 
         {user.permissions.includes("profile.update") && (
           <ProfileEditForm
+            userId={user.id}
             fullName={user.fullName}
             email={user.email}
             phone={profile?.phone ?? null}
             avatarUrl={profile?.avatar_url ?? user.avatarUrl}
-            avatarColor={avatarColor}
             memberId={profile?.member_id ?? null}
             skills={skills}
           />

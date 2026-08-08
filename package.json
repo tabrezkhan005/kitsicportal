@@ -24,6 +24,7 @@
     "db:seed": "npm run seed --workspace=@kitsic/database",
     "db:seed:demo": "npm run seed:demo --workspace=@kitsic/database",
     "db:cleanup:demo": "npm run cleanup:demo --workspace=@kitsic/database",
+    "db:create:president": "npm run create:president --workspace=@kitsic/database",
     "db:seed:modules": "npm run seed:modules --workspace=@kitsic/database",
     "db:seed:extended": "npm run seed:extended --workspace=@kitsic/database"
   },

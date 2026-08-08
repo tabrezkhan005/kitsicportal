@@ -23,6 +23,7 @@
     "seed": "tsx src/seed.ts",
     "seed:demo": "tsx src/seed-demo-users.ts",
     "cleanup:demo": "tsx src/cleanup-demo-data.ts",
+    "create:president": "tsx src/create-president.ts",
     "seed:modules": "tsx src/seed-modules.ts",
     "seed:extended": "tsx src/seed-extended.ts"
   },

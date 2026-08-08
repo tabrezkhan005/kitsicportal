@@ -7,6 +7,8 @@ function isPublicPath(pathname: string) {
   if (publicRoutes.some((route) => pathname.startsWith(route))) return true;
   if (pathname.startsWith("/api/auth")) return true;
   if (pathname.startsWith("/api/health")) return true;
+  if (pathname.startsWith("/api/google/callback")) return true;
+  if (pathname.startsWith("/api/cron/")) return true;
   return false;
 }
 

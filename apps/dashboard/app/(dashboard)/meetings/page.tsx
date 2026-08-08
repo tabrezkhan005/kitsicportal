@@ -1,5 +1,6 @@
 import { requirePermission } from "@kitsic/auth";
 import { getMeetings } from "@/lib/data";
+import { getGoogleCalendarStatus } from "@/lib/google/client";
 import { ForbiddenPage } from "@/components/forbidden-page";
 import { MeetingsList } from "@/features/meetings/meetings-list";
 
@@ -13,12 +14,13 @@ export default async function MeetingsPage() {
     return <ForbiddenPage />;
   }
 
-  const meetings = await getMeetings();
+  const [meetings, googleStatus] = await Promise.all([getMeetings(), getGoogleCalendarStatus()]);
 
   return (
     <MeetingsList
       meetings={meetings}
       canManage={user.permissions.includes("meetings.manage")}
+      googleConnected={googleStatus.connected}
     />
   );
 }

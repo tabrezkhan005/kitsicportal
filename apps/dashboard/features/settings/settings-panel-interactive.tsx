@@ -1,10 +1,11 @@
 "use client";
 
-import { useState, useTransition } from "react";
-import { useRouter } from "next/navigation";
+import { useEffect, useState, useTransition } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Badge, Button, Card, CardContent, CardDescription, CardHeader, CardTitle, Input } from "@kitsic/ui";
 import { Key, Settings2, Trash2 } from "lucide-react";
 import { createApiKey, revokeApiKey, updateSystemSetting } from "@/lib/actions";
+import { GoogleCalendarCard } from "@/features/settings/google-calendar-card";
 
 interface SystemSetting {
   key: string;
@@ -23,6 +24,11 @@ interface SettingsPanelInteractiveProps {
   settings: SystemSetting[];
   apiKeys: ApiKey[];
   canManage?: boolean;
+  googleStatus?: {
+    connected: boolean;
+    email?: string;
+    connectedAt?: string;
+  };
 }
 
 const SETTING_LABELS: Record<string, string> = {
@@ -32,11 +38,30 @@ const SETTING_LABELS: Record<string, string> = {
   integrations: "Integrations",
 };
 
-export function SettingsPanelInteractive({ settings, apiKeys, canManage = false }: SettingsPanelInteractiveProps) {
+export function SettingsPanelInteractive({
+  settings,
+  apiKeys,
+  canManage = false,
+  googleStatus = { connected: false },
+}: SettingsPanelInteractiveProps) {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [newKeyName, setNewKeyName] = useState("");
   const [generatedKey, setGeneratedKey] = useState<string | null>(null);
+  const [googleMessage, setGoogleMessage] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
+
+  useEffect(() => {
+    const google = searchParams.get("google");
+    const reason = searchParams.get("reason");
+    if (google === "connected") {
+      setGoogleMessage("Google Calendar connected successfully.");
+    } else if (google === "error") {
+      setGoogleMessage(reason ? `Google connection failed: ${decodeURIComponent(reason)}` : "Google connection failed.");
+    }
+  }, [searchParams]);
+
+  const visibleSettings = settings.filter((setting) => setting.key !== "google_calendar");
 
   function handleUpdateSetting(key: string, field: string, value: string) {
     const setting = settings.find((s) => s.key === key);
@@ -67,8 +92,21 @@ export function SettingsPanelInteractive({ settings, apiKeys, canManage = false 
 
   return (
     <div className="space-y-6">
+      {googleMessage && (
+        <div className="rounded-[var(--radius-md)] border border-accent/30 bg-accent/5 px-4 py-3 text-sm text-primary">
+          {googleMessage}
+        </div>
+      )}
+
+      <GoogleCalendarCard
+        connected={googleStatus.connected}
+        email={googleStatus.email}
+        connectedAt={googleStatus.connectedAt}
+        canManage={canManage}
+      />
+
       <div className="grid gap-4 md:grid-cols-2">
-        {settings.map((setting) => (
+        {visibleSettings.map((setting) => (
           <Card key={setting.key}>
             <CardHeader>
               <CardTitle className="flex items-center gap-2 text-base">

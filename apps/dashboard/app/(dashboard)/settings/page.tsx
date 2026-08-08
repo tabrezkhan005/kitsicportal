@@ -1,5 +1,6 @@
 import { requirePermission } from "@kitsic/auth";
 import { getApiKeys, getSystemSettings } from "@/lib/data";
+import { getGoogleCalendarStatus } from "@/lib/google/client";
 import { ForbiddenPage } from "@/components/forbidden-page";
 import { PageHeader } from "@/components/page-header";
 import { SettingsPanelInteractive } from "@/features/settings/settings-panel-interactive";
@@ -14,7 +15,11 @@ export default async function SettingsPage() {
     return <ForbiddenPage />;
   }
 
-  const [settings, apiKeys] = await Promise.all([getSystemSettings(), getApiKeys()]);
+  const [settings, apiKeys, googleStatus] = await Promise.all([
+    getSystemSettings(),
+    getApiKeys(),
+    getGoogleCalendarStatus(),
+  ]);
 
   return (
     <div className="space-y-6">
@@ -23,6 +28,7 @@ export default async function SettingsPage() {
         settings={settings}
         apiKeys={apiKeys}
         canManage={user.permissions.includes("settings.manage")}
+        googleStatus={googleStatus}
       />
     </div>
   );

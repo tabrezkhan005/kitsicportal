@@ -2,14 +2,15 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { Badge, Button, Card, CardContent, CardDescription, CardHeader, CardTitle } from "@kitsic/ui";
-import { ExternalLink, Plus, Video, XCircle } from "lucide-react";
+import { BarChart3, ExternalLink, Plus, Video, XCircle } from "lucide-react";
 import { EmptyState } from "@/components/empty-state";
 import { PageCreateButton } from "@/components/page-create-button";
 import { PageHeader } from "@/components/page-header";
 import { Modal } from "@/components/modal";
 import { CreateForm } from "@/components/create-form";
-import { cancelMeeting, createMeeting } from "@/lib/actions";
+import { cancelMeeting, createMeeting, joinMeeting } from "@/lib/actions";
 
 interface Meeting {
   id: string;
@@ -24,9 +25,10 @@ interface Meeting {
 interface MeetingsListProps {
   meetings: Meeting[];
   canManage?: boolean;
+  googleConnected?: boolean;
 }
 
-export function MeetingsList({ meetings, canManage = false }: MeetingsListProps) {
+export function MeetingsList({ meetings, canManage = false, googleConnected = false }: MeetingsListProps) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [isPending, startTransition] = useTransition();
@@ -38,11 +40,39 @@ export function MeetingsList({ meetings, canManage = false }: MeetingsListProps)
     });
   }
 
+  function handleJoin(meetingId: string) {
+    startTransition(async () => {
+      const result = await joinMeeting(meetingId);
+      if (result.data?.meetLink) {
+        window.open(result.data.meetLink, "_blank", "noopener,noreferrer");
+      }
+      router.refresh();
+    });
+  }
+
+  const createFields = [
+    { name: "title", label: "Title", required: true, placeholder: "Weekly leadership meet" },
+    { name: "description", label: "Description", type: "textarea" as const, placeholder: "Agenda" },
+    { name: "starts_at", label: "Starts at", type: "datetime-local" as const, required: true },
+    { name: "ends_at", label: "Ends at (optional)", type: "datetime-local" as const },
+    ...(googleConnected
+      ? []
+      : [{
+          name: "meet_link",
+          label: "Google Meet link (optional)",
+          placeholder: "Connect Google in Settings for auto-generated links",
+        }]),
+  ];
+
   return (
     <div className="space-y-6">
       <PageHeader
         title="Meetings"
-        description="Scheduled and past club meetings"
+        description={
+          googleConnected
+            ? "Schedule meetings with real Google Meet links — all members are invited automatically."
+            : "Connect Google Calendar in Settings to create real Meet links from the portal."
+        }
         actions={
           canManage ? (
             <PageCreateButton label="Schedule meeting" onClick={() => setOpen(true)} />
@@ -50,11 +80,21 @@ export function MeetingsList({ meetings, canManage = false }: MeetingsListProps)
         }
       />
 
+      {!googleConnected && canManage && (
+        <div className="rounded-[var(--radius-md)] border border-amber-500/30 bg-amber-500/5 px-4 py-3 text-sm text-primary">
+          Google Calendar is not connected.{" "}
+          <Link href="/settings" className="font-semibold underline underline-offset-2">
+            Connect in Settings
+          </Link>{" "}
+          to auto-create Meet links and sync attendance.
+        </div>
+      )}
+
       {meetings.length === 0 ? (
         <EmptyState
           icon={Video}
           title="No meetings scheduled"
-          description="Schedule a club meeting with a Google Meet link for members to join."
+          description="Schedule a club meeting with a Google Meet link for all leadership and members."
           action={
             canManage ? (
               <Button type="button" onClick={() => setOpen(true)} className="font-ui rounded-xl">
@@ -88,16 +128,23 @@ export function MeetingsList({ meetings, canManage = false }: MeetingsListProps)
                   })}
                 </div>
                 <div className="flex flex-wrap items-center gap-2">
+                  <Button asChild variant="outline" size="sm" className="font-ui rounded-lg">
+                    <Link href={`/meetings/${meeting.id}`}>
+                      <BarChart3 className="h-3.5 w-3.5" />
+                      Attendance
+                    </Link>
+                  </Button>
                   {meeting.meet_link && meeting.status === "scheduled" && (
-                    <a
-                      href={meeting.meet_link}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-3 py-1.5 text-sm font-semibold text-white transition-colors hover:bg-secondary font-ui"
+                    <Button
+                      type="button"
+                      size="sm"
+                      disabled={isPending}
+                      onClick={() => handleJoin(meeting.id)}
+                      className="font-ui rounded-lg"
                     >
                       <ExternalLink className="h-3.5 w-3.5" />
                       Join Meet
-                    </a>
+                    </Button>
                   )}
                   {canManage && meeting.status === "scheduled" && (
                     <Button
@@ -124,17 +171,7 @@ export function MeetingsList({ meetings, canManage = false }: MeetingsListProps)
           action={createMeeting}
           onSuccess={() => setOpen(false)}
           submitLabel="Schedule meeting"
-          fields={[
-            { name: "title", label: "Title", required: true, placeholder: "Weekly standup" },
-            { name: "description", label: "Description", type: "textarea", placeholder: "Agenda or notes" },
-            { name: "starts_at", label: "Starts at", type: "datetime-local", required: true },
-            { name: "ends_at", label: "Ends at (optional)", type: "datetime-local" },
-            {
-              name: "meet_link",
-              label: "Google Meet link",
-              placeholder: "https://meet.google.com/xxx-yyyy-zzz (auto-generated if empty)",
-            },
-          ]}
+          fields={createFields}
         />
       </Modal>
     </div>

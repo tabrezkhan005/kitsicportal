@@ -10,6 +10,8 @@ export async function GET() {
     smtpHost: Boolean(process.env.SMTP_HOST),
     appUrl,
     appUrlIsProduction: appUrl?.startsWith("https://portal.kitsic.in") ?? false,
+    googleConfigured: Boolean(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET),
+    googleRedirectUri: process.env.GOOGLE_REDIRECT_URI ?? null,
   };
 
   let adminAuthOk = false;

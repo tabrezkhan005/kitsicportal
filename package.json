@@ -20,6 +20,7 @@
     "db:migrate:member-ids": "npm run migrate:member-ids --workspace=@kitsic/database",
     "db:migrate:signup-fix": "npm run migrate:signup-fix --workspace=@kitsic/database",
     "db:migrate:task-comments": "npm run migrate:task-comments --workspace=@kitsic/database",
+    "db:migrate:google-meet": "npm run migrate:google-meet --workspace=@kitsic/database",
     "db:seed": "npm run seed --workspace=@kitsic/database",
     "db:seed:demo": "npm run seed:demo --workspace=@kitsic/database",
     "db:cleanup:demo": "npm run cleanup:demo --workspace=@kitsic/database",

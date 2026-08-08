@@ -118,21 +118,55 @@ export async function createEvent(formData: FormData): Promise<ActionResult> {
 
 // ─── Meetings ────────────────────────────────────────────────────────────────
 
+function parseFormDateTime(value: FormDataEntryValue | null): string | null {
+  if (!value || typeof value !== "string" || !value.trim()) return null;
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return null;
+  return parsed.toISOString();
+}
+
 export async function createMeeting(formData: FormData): Promise<ActionResult> {
   const user = await requirePermission("meetings.manage");
   const supabase = createAdminClient();
 
   const title = (formData.get("title") as string)?.trim();
-  const startsAt = formData.get("starts_at") as string;
+  const startsAt = parseFormDateTime(formData.get("starts_at"));
   if (!title || !startsAt) return { error: "Title and start date are required" };
 
-  const meetLinkInput = (formData.get("meet_link") as string)?.trim();
-  const meetLink =
-    meetLinkInput ||
-    `https://meet.google.com/${randomBytes(3).toString("hex")}-${randomBytes(2).toString("hex")}-${randomBytes(2).toString("hex")}`;
+  const endsAt =
+    parseFormDateTime(formData.get("ends_at"))
+    ?? new Date(new Date(startsAt).getTime() + 3600000).toISOString();
 
-  const endsAt = formData.get("ends_at") as string ||
-    new Date(new Date(startsAt).getTime() + 3600000).toISOString();
+  const meetLinkInput = (formData.get("meet_link") as string)?.trim();
+  let meetLink = meetLinkInput || null;
+  let googleEventId: string | null = null;
+  let googleMeetCode: string | null = null;
+
+  if (!meetLink) {
+    try {
+      const { createGoogleCalendarMeeting } = await import("@/lib/google/calendar");
+      const { getStoredGoogleTokens } = await import("@/lib/google/client");
+      const connected = await getStoredGoogleTokens();
+      if (!connected) {
+        return {
+          error: "Connect Google Calendar in Settings first, or paste a Meet link manually.",
+        };
+      }
+
+      const created = await createGoogleCalendarMeeting({
+        title,
+        description: (formData.get("description") as string) || null,
+        startsAt,
+        endsAt,
+      });
+      meetLink = created.meetLink;
+      googleEventId = created.googleEventId;
+      googleMeetCode = created.googleMeetCode;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Failed to create Google Meet";
+      return { error: message };
+    }
+  }
 
   const { data, error } = await supabase.from("meetings").insert({
     title,
@@ -140,12 +174,15 @@ export async function createMeeting(formData: FormData): Promise<ActionResult> {
     starts_at: startsAt,
     ends_at: endsAt,
     meet_link: meetLink,
+    google_event_id: googleEventId,
+    google_meet_code: googleMeetCode,
+    meeting_mode: "online",
     status: "scheduled",
     created_by: user.id,
   }).select("id").single();
 
   if (error) return { error: error.message };
-  await writeAudit(user.id, "meeting.create", "meeting", data.id, { title, meetLink });
+  await writeAudit(user.id, "meeting.create", "meeting", data.id, { title, meetLink, googleEventId });
   revalidateDashboard("/meetings", "/calendar");
   return { success: true };
 }
@@ -153,6 +190,21 @@ export async function createMeeting(formData: FormData): Promise<ActionResult> {
 export async function cancelMeeting(meetingId: string): Promise<ActionResult> {
   const user = await requirePermission("meetings.manage");
   const supabase = createAdminClient();
+
+  const { data: meeting } = await supabase
+    .from("meetings")
+    .select("google_event_id")
+    .eq("id", meetingId)
+    .maybeSingle();
+
+  if (meeting?.google_event_id) {
+    try {
+      const { cancelGoogleCalendarMeeting } = await import("@/lib/google/calendar");
+      await cancelGoogleCalendarMeeting(meeting.google_event_id);
+    } catch {
+      // Continue cancelling locally even if Google delete fails.
+    }
+  }
 
   const { error } = await supabase
     .from("meetings")
@@ -162,6 +214,77 @@ export async function cancelMeeting(meetingId: string): Promise<ActionResult> {
   if (error) return { error: error.message };
   await writeAudit(user.id, "meeting.cancel", "meeting", meetingId);
   revalidateDashboard("/meetings", "/calendar", "/");
+  return { success: true };
+}
+
+export async function joinMeeting(meetingId: string): Promise<ActionResult & { data?: { meetLink: string } }> {
+  const user = await getSessionUser();
+  if (!user) return { error: "Unauthorized" };
+
+  const supabase = createAdminClient();
+  const { data: meeting } = await supabase
+    .from("meetings")
+    .select("id, meet_link, starts_at, ends_at, status")
+    .eq("id", meetingId)
+    .maybeSingle();
+
+  if (!meeting?.meet_link) return { error: "Meeting link not found" };
+  if (meeting.status !== "scheduled") return { error: "Meeting is not active" };
+
+  const now = new Date().toISOString();
+  const { data: existing } = await supabase
+    .from("attendance_records")
+    .select("id, joined_at")
+    .eq("meeting_id", meetingId)
+    .eq("user_id", user.id)
+    .maybeSingle();
+
+  if (existing?.id) {
+    if (!existing.joined_at) {
+      await supabase
+        .from("attendance_records")
+        .update({ joined_at: now, status: "partial", source: "portal", updated_at: now })
+        .eq("id", existing.id);
+    }
+  } else {
+    await supabase.from("attendance_records").insert({
+      user_id: user.id,
+      meeting_id: meetingId,
+      status: "partial",
+      joined_at: now,
+      duration_minutes: 0,
+      source: "portal",
+    });
+  }
+
+  revalidateDashboard("/meetings", `/meetings/${meetingId}`, "/attendance", "/profile");
+  return { success: true, data: { meetLink: meeting.meet_link } };
+}
+
+export async function syncMeetingAttendance(meetingId: string): Promise<ActionResult> {
+  await requirePermission("attendance.manage");
+  try {
+    const { syncMeetingAttendanceFromGoogle } = await import("@/lib/google/meet-sync");
+    const result = await syncMeetingAttendanceFromGoogle(meetingId);
+    revalidateDashboard("/meetings", `/meetings/${meetingId}`, "/attendance");
+    return {
+      success: true,
+      data: {
+        synced: result.synced,
+        conferenceFound: result.conferenceFound,
+      },
+    };
+  } catch (error) {
+    return { error: error instanceof Error ? error.message : "Sync failed" };
+  }
+}
+
+export async function disconnectGoogleCalendar(): Promise<ActionResult> {
+  const user = await requirePermission("settings.manage");
+  const { clearGoogleTokens } = await import("@/lib/google/client");
+  await clearGoogleTokens();
+  await writeAudit(user.id, "google.disconnect", "system_setting", undefined);
+  revalidateDashboard("/settings", "/meetings");
   return { success: true };
 }
 

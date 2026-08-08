@@ -32,7 +32,11 @@ export default async function MeetingDetailPage({ params }: MeetingDetailPagePro
         title="Meeting attendance"
         description="Track leadership and member presence with automatic Google Meet sync"
       />
-      <MeetingAttendancePanel summary={summary} canManage={canManage} />
+      <MeetingAttendancePanel
+        summary={summary}
+        canManage={canManage}
+        currentUserId={user.id}
+      />
     </div>
   );
 }

@@ -20,6 +20,7 @@
     "migrate:signup-fix": "tsx src/migrate-signup-fix.ts",
     "migrate:task-comments": "tsx src/migrate-task-comments.ts",
     "migrate:google-meet": "tsx src/migrate-google-meet.ts",
+    "migrate:meeting-mom": "tsx src/migrate-meeting-mom.ts",
     "seed": "tsx src/seed.ts",
     "seed:demo": "tsx src/seed-demo-users.ts",
     "cleanup:demo": "tsx src/cleanup-demo-data.ts",

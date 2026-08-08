@@ -15,10 +15,12 @@ import {
 import { ArrowLeft, RefreshCw, Users, Video } from "lucide-react";
 import { syncMeetingAttendance } from "@/lib/actions";
 import type { MeetingAttendanceSummary } from "@/lib/meeting-attendance";
+import { MeetingMomSection } from "@/features/meetings/meeting-mom-section";
 
 interface MeetingAttendancePanelProps {
   summary: MeetingAttendanceSummary;
   canManage?: boolean;
+  currentUserId: string;
 }
 
 function formatDateTime(value: string | null) {
@@ -32,10 +34,12 @@ function statusVariant(status: "present" | "partial" | "absent") {
   return "muted" as const;
 }
 
-export function MeetingAttendancePanel({ summary, canManage = false }: MeetingAttendancePanelProps) {
+export function MeetingAttendancePanel({ summary, canManage = false, currentUserId }: MeetingAttendancePanelProps) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
-  const { meeting, rows, stats, presentThresholdMinutes } = summary;
+  const { meeting, rows, stats, presentThresholdMinutes, momAssignee } = summary;
+  const canUploadMom =
+    Boolean(momAssignee && (momAssignee.id === currentUserId || canManage));
 
   function handleSync() {
     startTransition(async () => {
@@ -91,6 +95,18 @@ export function MeetingAttendancePanel({ summary, canManage = false }: MeetingAt
           />
         </CardContent>
       </Card>
+
+      <MeetingMomSection
+        meetingId={meeting.id}
+        meetingTitle={meeting.title}
+        momAssignee={momAssignee}
+        momStatus={meeting.mom_status}
+        momFileUrl={meeting.mom_file_url}
+        momFileName={meeting.mom_file_name}
+        momUploadedAt={meeting.mom_uploaded_at}
+        currentUserId={currentUserId}
+        canUpload={canUploadMom}
+      />
 
       <Card className="dashboard-card overflow-hidden border-primary/10">
         <CardHeader className="border-b border-[var(--dashboard-border-subtle)]">

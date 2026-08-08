@@ -40,7 +40,16 @@ export interface MeetingAttendanceSummary {
     status: string;
     google_meet_code: string | null;
     attendance_synced_at: string | null;
+    mom_status: string | null;
+    mom_file_url: string | null;
+    mom_file_name: string | null;
+    mom_uploaded_at: string | null;
   };
+  momAssignee: {
+    id: string;
+    fullName: string;
+    email: string;
+  } | null;
   rows: MeetingAttendanceRow[];
   stats: {
     expected: number;
@@ -126,6 +135,22 @@ export async function getMeetingAttendanceSummary(meetingId: string): Promise<Me
   const leadershipRows = rows.filter((row) => row.isLeadership);
   const memberRows = rows.filter((row) => !row.isLeadership);
 
+  let momAssignee: MeetingAttendanceSummary["momAssignee"] = null;
+  if (meeting.mom_assignee_id) {
+    const { data: assignee } = await supabase
+      .from("users")
+      .select("id, full_name, email")
+      .eq("id", meeting.mom_assignee_id)
+      .maybeSingle();
+    if (assignee) {
+      momAssignee = {
+        id: assignee.id,
+        fullName: assignee.full_name ?? assignee.email,
+        email: assignee.email,
+      };
+    }
+  }
+
   return {
     meeting: {
       id: meeting.id,
@@ -137,7 +162,12 @@ export async function getMeetingAttendanceSummary(meetingId: string): Promise<Me
       status: meeting.status,
       google_meet_code: meeting.google_meet_code,
       attendance_synced_at: meeting.attendance_synced_at,
+      mom_status: meeting.mom_status ?? "pending",
+      mom_file_url: meeting.mom_file_url ?? null,
+      mom_file_name: meeting.mom_file_name ?? null,
+      mom_uploaded_at: meeting.mom_uploaded_at ?? null,
     },
+    momAssignee,
     rows,
     stats: {
       expected: rows.length,

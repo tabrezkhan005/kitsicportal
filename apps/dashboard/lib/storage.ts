@@ -43,3 +43,31 @@ export async function uploadClubDocumentFile(userId: string, file: File, folder 
   const { data: urlData } = supabase.storage.from("club-documents").getPublicUrl(path);
   return { url: urlData.publicUrl, fileName: file.name };
 }
+
+export async function uploadMeetingMomFile(userId: string, meetingId: string, file: File) {
+  if (file.size > MAX_DOCUMENT_BYTES) return { error: "File must be under 15 MB" as const };
+
+  const allowed = [
+    "application/pdf",
+    "application/msword",
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    "text/plain",
+  ];
+  if (file.type && !allowed.includes(file.type)) {
+    return { error: "Upload PDF, Word, or plain text for MOM" as const };
+  }
+
+  const supabase = createAdminClient();
+  const path = `${userId}/meetings/${meetingId}/${Date.now()}-${sanitizeFileName(file.name)}`;
+  const buffer = Buffer.from(await file.arrayBuffer());
+
+  const { error: uploadError } = await supabase.storage.from("club-documents").upload(path, buffer, {
+    contentType: file.type || "application/octet-stream",
+    upsert: true,
+  });
+
+  if (uploadError) return { error: uploadError.message };
+
+  const { data: urlData } = supabase.storage.from("club-documents").getPublicUrl(path);
+  return { url: urlData.publicUrl, fileName: file.name };
+}

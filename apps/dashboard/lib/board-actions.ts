@@ -270,15 +270,33 @@ async function notifyCardAssignment(
   if (assigneeId === assignerId) return;
 
   const supabase = createAdminClient();
-  const { data: card } = await supabase.from("task_cards").select("title").eq("id", cardId).single();
+  const { data: card } = await supabase.from("task_cards").select("title, due_date").eq("id", cardId).single();
   if (!card) return;
+
+  const { data: assignee } = await supabase
+    .from("users")
+    .select("email, full_name")
+    .eq("id", assigneeId)
+    .single();
 
   await createNotification({
     userId: assigneeId,
     title: "Task assigned to you",
     message: `${assignerName ?? "A club member"} added you to "${card.title}" on the club board.`,
     type: "task",
+    sendEmail: false,
   });
+
+  if (assignee?.email) {
+    const { sendTaskAssignedEmail } = await import("@/lib/email");
+    await sendTaskAssignedEmail({
+      to: assignee.email,
+      recipientName: assignee.full_name ?? assignee.email,
+      taskTitle: card.title,
+      assignerName: assignerName ?? "A club member",
+      dueDate: card.due_date ?? null,
+    });
+  }
 }
 
 export async function toggleCardMember(cardId: string, userId: string, add: boolean): Promise<ActionResult> {

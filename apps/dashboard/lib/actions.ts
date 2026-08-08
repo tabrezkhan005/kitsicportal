@@ -5,6 +5,8 @@ import { createAdminClient, logAuditEvent } from "@kitsic/database";
 import { revalidatePath } from "next/cache";
 import { headers } from "next/headers";
 import { randomBytes } from "node:crypto";
+import { createNotification } from "@/lib/notify";
+import { sendTaskAssignedEmail } from "@/lib/email";
 
 export interface ActionResult {
   success?: boolean;
@@ -57,6 +59,34 @@ export async function createTask(formData: FormData): Promise<ActionResult> {
   }).select("id").single();
 
   if (error) return { error: error.message };
+
+  const assignedTo = (formData.get("assigned_to") as string) || null;
+  if (assignedTo && assignedTo !== user.id) {
+    const { data: assignee } = await supabase
+      .from("users")
+      .select("email, full_name")
+      .eq("id", assignedTo)
+      .single();
+
+    await createNotification({
+      userId: assignedTo,
+      title: "Task assigned to you",
+      message: `${user.fullName ?? "A club member"} assigned you "${title}".`,
+      type: "task",
+      sendEmail: false,
+    });
+
+    if (assignee?.email) {
+      await sendTaskAssignedEmail({
+        to: assignee.email,
+        recipientName: assignee.full_name ?? assignee.email,
+        taskTitle: title,
+        assignerName: user.fullName ?? "A club member",
+        dueDate: (formData.get("due_date") as string) || null,
+      });
+    }
+  }
+
   await writeAudit(user.id, "task.create", "task", data.id, { title });
   revalidateDashboard("/tasks", "/");
   return { success: true };
@@ -182,8 +212,31 @@ export async function createMeeting(formData: FormData): Promise<ActionResult> {
   }).select("id").single();
 
   if (error) return { error: error.message };
+
+  try {
+    const { notifyMeetingCreated } = await import("@/lib/meeting-notifications");
+    const { momAssigneeId } = await notifyMeetingCreated({
+      meetingId: data.id,
+      title,
+      description: (formData.get("description") as string) || null,
+      startsAt,
+      endsAt,
+      meetLink,
+      createdByUserId: user.id,
+    });
+
+    if (momAssigneeId) {
+      await supabase
+        .from("meetings")
+        .update({ mom_assignee_id: momAssigneeId, mom_status: "pending" })
+        .eq("id", data.id);
+    }
+  } catch (notifyError) {
+    console.error("createMeeting: notifications failed", notifyError);
+  }
+
   await writeAudit(user.id, "meeting.create", "meeting", data.id, { title, meetLink, googleEventId });
-  revalidateDashboard("/meetings", "/calendar");
+  revalidateDashboard("/meetings", "/calendar", `/meetings/${data.id}`);
   return { success: true };
 }
 
@@ -285,6 +338,54 @@ export async function disconnectGoogleCalendar(): Promise<ActionResult> {
   await clearGoogleTokens();
   await writeAudit(user.id, "google.disconnect", "system_setting", undefined);
   revalidateDashboard("/settings", "/meetings");
+  return { success: true };
+}
+
+export async function uploadMeetingMom(meetingId: string, formData: FormData): Promise<ActionResult> {
+  const user = await getSessionUser();
+  if (!user) return { error: "Unauthorized" };
+
+  const supabase = createAdminClient();
+  const { data: meeting } = await supabase
+    .from("meetings")
+    .select("id, title, mom_assignee_id, mom_status")
+    .eq("id", meetingId)
+    .maybeSingle();
+
+  if (!meeting) return { error: "Meeting not found" };
+
+  const canManage = user.permissions.includes("meetings.manage");
+  const isAssignee = meeting.mom_assignee_id === user.id;
+  if (!isAssignee && !canManage) {
+    return { error: "Only the assigned MOM writer or leadership can upload minutes" };
+  }
+
+  const file = formData.get("mom_file");
+  if (!(file instanceof File) || file.size === 0) {
+    return { error: "Choose a MOM file to upload" };
+  }
+
+  const { uploadMeetingMomFile } = await import("@/lib/storage");
+  const result = await uploadMeetingMomFile(user.id, meetingId, file);
+  if ("error" in result && result.error) return { error: result.error };
+
+  const { error: updateError } = await supabase
+    .from("meetings")
+    .update({
+      mom_file_url: result.url,
+      mom_file_name: result.fileName,
+      mom_uploaded_at: new Date().toISOString(),
+      mom_status: "uploaded",
+    })
+    .eq("id", meetingId);
+
+  if (updateError) return { error: updateError.message };
+
+  await writeAudit(user.id, "meeting.mom_upload", "meeting", meetingId, {
+    fileName: result.fileName,
+  });
+
+  revalidateDashboard("/meetings", `/meetings/${meetingId}`);
   return { success: true };
 }
 

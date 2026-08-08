@@ -3,6 +3,8 @@ import "server-only";
 export const GOOGLE_CALENDAR_SETTING_KEY = "google_calendar";
 
 export const GOOGLE_OAUTH_SCOPES = [
+  "openid",
+  "https://www.googleapis.com/auth/userinfo.email",
   "https://www.googleapis.com/auth/calendar.events",
   "https://www.googleapis.com/auth/calendar",
   "https://www.googleapis.com/auth/meetings.space.readonly",

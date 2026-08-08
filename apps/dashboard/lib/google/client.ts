@@ -98,26 +98,46 @@ export async function getAuthenticatedGoogleClient() {
   return oauth2Client;
 }
 
-export async function exchangeCodeForTokens(code: string): Promise<GoogleCalendarTokens> {
-  const oauth2Client = createOAuth2Client();
-  const { tokens } = await oauth2Client.getToken(code);
-  oauth2Client.setCredentials(tokens);
+function readEmailFromIdToken(idToken: string): string | undefined {
+  try {
+    const payload = idToken.split(".")[1];
+    if (!payload) return undefined;
+    const normalized = payload.replace(/-/g, "+").replace(/_/g, "/");
+    const json = Buffer.from(normalized, "base64").toString("utf8");
+    const data = JSON.parse(json) as { email?: string };
+    return data.email;
+  } catch {
+    return undefined;
+  }
+}
 
-  const oauth2 = google.oauth2({ version: "v2", auth: oauth2Client });
-  const { data: profile } = await oauth2.userinfo.get();
+export async function exchangeCodeForTokens(code: string): Promise<GoogleCalendarTokens> {
+  const redirectUri = getGoogleRedirectUri();
+  const oauth2Client = createOAuth2Client();
+  const { tokens } = await oauth2Client.getToken({ code, redirect_uri: redirectUri });
+  oauth2Client.setCredentials(tokens);
 
   if (!tokens.refresh_token) {
     throw new Error("Google did not return a refresh token. Disconnect and reconnect with consent.");
   }
-  if (!profile.email) {
-    throw new Error("Could not read Google account email.");
+
+  let email = tokens.id_token ? readEmailFromIdToken(tokens.id_token) : undefined;
+
+  if (!email) {
+    const oauth2 = google.oauth2({ version: "v2", auth: oauth2Client });
+    const { data: profile } = await oauth2.userinfo.get();
+    email = profile.email ?? undefined;
+  }
+
+  if (!email) {
+    throw new Error("Could not read Google account email. Add openid and email scopes in Google Cloud Console.");
   }
 
   return {
     access_token: tokens.access_token ?? undefined,
     refresh_token: tokens.refresh_token,
     expiry_date: tokens.expiry_date ?? undefined,
-    email: profile.email,
+    email,
     connected_by: "",
     connected_at: new Date().toISOString(),
   };

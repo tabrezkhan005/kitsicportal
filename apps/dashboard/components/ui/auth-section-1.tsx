@@ -146,25 +146,25 @@ export default function AuthSectionOne() {
   }
 
   return (
-    <section className="auth-grid-bg relative h-screen overflow-hidden text-primary">
+    <section className="auth-grid-bg auth-shell relative min-h-[100dvh] overflow-hidden text-primary">
       <div className="pointer-events-none absolute -left-32 top-1/4 h-72 w-72 rounded-full bg-accent/10 blur-3xl" />
       <div className="pointer-events-none absolute -right-24 bottom-1/4 h-64 w-64 rounded-full bg-primary/8 blur-3xl" />
 
-      <div className="relative grid h-screen gap-0 lg:grid-cols-[1fr_1.08fr]">
-        <div className="flex h-full items-center justify-center px-4 py-4 sm:px-6 lg:px-10">
-          <div className="auth-card-shadow flex max-h-[calc(100vh-2rem)] w-full max-w-[440px] flex-col rounded-2xl border border-primary/10 bg-white/95 backdrop-blur-sm">
+      <div className="auth-shell relative grid min-h-[100dvh] gap-0 lg:grid-cols-[1fr_1.08fr]">
+        <div className="flex min-h-0 items-center justify-center px-3 py-2 sm:px-6 lg:px-10">
+          <div className="auth-card auth-card-shadow flex max-h-[calc(100dvh-1rem)] w-full max-w-[440px] flex-col rounded-2xl border border-primary/10 bg-white/95 backdrop-blur-sm">
             {/* Fixed header */}
-            <div className="shrink-0 px-5 pt-5 sm:px-7 sm:pt-6">
-              <div className="mb-4 flex flex-col items-center text-center">
+            <div className="auth-card-header shrink-0 px-4 pt-4 sm:px-7 sm:pt-6">
+              <div className="mb-3 flex flex-col items-center text-center sm:mb-4">
                 <Image
                   src="/logo/bgic.png"
                   alt="KITS Innovation Club"
                   width={160}
                   height={200}
-                  className="h-20 w-auto max-w-[160px] object-contain sm:h-24"
+                  className="auth-logo h-16 w-auto max-w-[140px] object-contain sm:h-20 sm:max-w-[160px]"
                   priority
                 />
-                <span className="font-mono-brand mt-2 inline-flex items-center gap-1.5 rounded-full border border-primary/10 bg-primary/3 px-3 py-1 text-[10px] font-medium uppercase tracking-[0.18em] text-primary/60">
+                <span className="auth-badge font-mono-brand mt-2 inline-flex items-center gap-1.5 rounded-full border border-primary/10 bg-primary/3 px-3 py-1 text-[10px] font-medium uppercase tracking-[0.18em] text-primary/60">
                   <Sparkles className="h-3 w-3 text-accent" />
                   KITS Guntur
                 </span>
@@ -206,12 +206,12 @@ export default function AuthSectionOne() {
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: -6 }}
                   transition={{ duration: 0.25, ease: "easeInOut" }}
-                  className="mb-3 text-center"
+                  className="mb-2 text-center sm:mb-3"
                 >
-                  <h1 className="font-auth-display text-2xl font-extrabold leading-tight tracking-[-0.03em] text-primary sm:text-[1.75rem]">
+                  <h1 className="auth-title font-auth-display text-xl font-extrabold leading-tight tracking-[-0.03em] text-primary sm:text-[1.75rem]">
                     {isSignUp ? "Join the club" : "Welcome back"}
                   </h1>
-                  <p className="mt-1 font-body text-xs leading-relaxed text-primary/55 sm:text-sm">
+                  <p className="auth-subtitle mt-1 font-body text-xs leading-relaxed text-primary/55 sm:text-sm">
                     {isSignUp
                       ? "Create your account to access the Innovation Club dashboard"
                       : "Sign in to your KITSIC dashboard"}
@@ -222,7 +222,7 @@ export default function AuthSectionOne() {
 
             {/* Scrollable form fields */}
             <form onSubmit={handleSubmit} className="flex min-h-0 flex-1 flex-col">
-              <div className="auth-form-scroll min-h-0 flex-1 overflow-y-auto px-5 sm:px-7">
+              <div className="auth-form-scroll auth-form-body min-h-0 flex-1 overflow-y-auto px-4 sm:px-7">
                 <AnimatePresence mode="wait">
                   <motion.div
                     key={mode}
@@ -231,20 +231,34 @@ export default function AuthSectionOne() {
                     animate="animate"
                     exit="exit"
                     transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
-                    className="space-y-2.5 pb-2"
+                    className="space-y-2 pb-1"
                   >
                     {isSignUp ? (
-                      <>
+                      <div className={!otpStep ? "auth-signup-grid space-y-2 sm:space-y-0" : "space-y-2"}>
                         {!otpStep ? (
                           <>
-                            <FieldBox label="Full name" name="full_name" required compact />
-                            <FieldBox label="Roll number" name="roll_number" required placeholder="21BCE1234" mono compact />
-                            <BranchSelect name="branch" value={branch} onChange={setBranch} required options={BRANCHES} />
-                            <FieldBox label="Email" name="email" type="email" required compact />
-                            <FieldBox label="Phone number" name="phone" type="tel" required placeholder="+91 9876543210" compact />
-                            <FieldBox label="Password" name="password" type="password" required compact />
-                            <FieldBox label="Confirm password" name="confirm_password" type="password" required compact />
-                            <div className="font-body text-[10px] leading-relaxed text-primary/45 sm:text-[11px]">
+                            <div className="auth-field-compact">
+                              <FieldBox label="Full name" name="full_name" required compact />
+                            </div>
+                            <div className="auth-field-compact">
+                              <FieldBox label="Roll number" name="roll_number" required placeholder="21BCE1234" mono compact />
+                            </div>
+                            <div className="auth-field-compact auth-span-2">
+                              <BranchSelect name="branch" value={branch} onChange={setBranch} required options={BRANCHES} />
+                            </div>
+                            <div className="auth-field-compact">
+                              <FieldBox label="Email" name="email" type="email" required compact />
+                            </div>
+                            <div className="auth-field-compact">
+                              <FieldBox label="Phone number" name="phone" type="tel" required placeholder="+91 9876543210" compact />
+                            </div>
+                            <div className="auth-field-compact">
+                              <FieldBox label="Password" name="password" type="password" required compact />
+                            </div>
+                            <div className="auth-field-compact">
+                              <FieldBox label="Confirm password" name="confirm_password" type="password" required compact />
+                            </div>
+                            <div className="auth-span-2 font-body text-[10px] leading-relaxed text-primary/45 sm:text-[11px]">
                               <CheckboxLine>{termsText}</CheckboxLine>
                             </div>
                           </>
@@ -257,7 +271,7 @@ export default function AuthSectionOne() {
                             <FieldBox label="Verification code" name="otp" required placeholder="6-digit code" mono compact />
                           </>
                         )}
-                      </>
+                      </div>
                     ) : (
                       <>
                         <FieldBox label="Username" name="username" required placeholder="Roll no. or email" mono compact />
@@ -280,11 +294,11 @@ export default function AuthSectionOne() {
               </div>
 
               {/* Fixed footer with submit */}
-              <div className="shrink-0 border-t border-primary/5 px-5 py-4 sm:px-7">
+              <div className="auth-form-footer shrink-0 border-t border-primary/5 px-4 py-3 sm:px-7 sm:py-4">
                 <button
                   type="submit"
                   disabled={isPending}
-                  className="group flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-primary font-ui text-sm font-semibold text-white transition-all hover:bg-secondary hover:shadow-lg hover:shadow-primary/20 disabled:opacity-60"
+                  className="group flex h-10 w-full items-center justify-center gap-2 rounded-xl bg-primary font-ui text-sm font-semibold text-white transition-all hover:bg-secondary hover:shadow-lg hover:shadow-primary/20 disabled:opacity-60 sm:h-11"
                 >
                   {isPending ? (
                     "Please wait…"
@@ -295,7 +309,7 @@ export default function AuthSectionOne() {
                     </>
                   )}
                 </button>
-                <p className="mt-3 text-center font-body text-[10px] text-primary/40">
+                <p className="auth-institute mt-2 text-center font-body text-[10px] text-primary/40">
                   KKR &amp; KSR Institute of Technology and Sciences
                 </p>
               </div>

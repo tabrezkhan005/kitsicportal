@@ -167,7 +167,9 @@ export function EventsGrid({ events, proposals, canManage = false, canPropose = 
       )}
 
       <Modal open={proposeOpen} onOpenChange={setProposeOpen} title="Propose an event">
-        <ProposeEventForm onSuccess={() => setProposeOpen(false)} />
+        <div className="max-h-[70dvh] overflow-y-auto pr-1">
+          <ProposeEventForm onSuccess={() => setProposeOpen(false)} />
+        </div>
       </Modal>
 
       <Modal open={createOpen} onOpenChange={setCreateOpen} title="Create event">

@@ -18,8 +18,10 @@
     "migrate:storage": "tsx src/migrate-storage.ts",
     "migrate:member-ids": "tsx src/migrate-member-ids.ts",
     "migrate:signup-fix": "tsx src/migrate-signup-fix.ts",
+    "migrate:task-comments": "tsx src/migrate-task-comments.ts",
     "seed": "tsx src/seed.ts",
     "seed:demo": "tsx src/seed-demo-users.ts",
+    "cleanup:demo": "tsx src/cleanup-demo-data.ts",
     "seed:modules": "tsx src/seed-modules.ts",
     "seed:extended": "tsx src/seed-extended.ts"
   },

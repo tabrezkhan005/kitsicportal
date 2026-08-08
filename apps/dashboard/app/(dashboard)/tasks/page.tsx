@@ -44,7 +44,7 @@ export default async function TasksPage() {
             : "Shared club board · drag cards, add labels, checklists & members"
         }
       />
-      <TasksBoardClient board={board} members={members} />
+      <TasksBoardClient board={board} members={members} currentUserId={user.id} />
     </div>
   );
 }

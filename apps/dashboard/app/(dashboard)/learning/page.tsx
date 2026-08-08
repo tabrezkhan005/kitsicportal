@@ -2,6 +2,7 @@ import { requirePermission } from "@kitsic/auth";
 import { getLeaderboardForViewer, getMemberPerformance } from "@/lib/data";
 import { getLearningModules } from "@/lib/platform-data";
 import { viewerSeesFullLeaderboard } from "@/lib/leaderboard-utils";
+import { stripQuestionsForPlayer, normalizeQuestions } from "@/lib/learning-questions";
 import { ForbiddenPage } from "@/components/forbidden-page";
 import { LearningPanel } from "@/features/learning/learning-panel";
 
@@ -21,9 +22,21 @@ export default async function LearningPage() {
     getMemberPerformance(user.id),
   ]);
 
+  const panelModules = modules.map((module) => ({
+    id: module.id,
+    title: module.title,
+    description: module.description,
+    type: module.type,
+    due_date: module.due_date,
+    is_published: module.is_published,
+    submission: module.submission,
+    playerQuestions: stripQuestionsForPlayer(module.questions),
+    questionCount: normalizeQuestions(module.questions).length,
+  }));
+
   return (
     <LearningPanel
-      modules={modules}
+      modules={panelModules}
       leaderboard={leaderboard}
       currentUserId={user.id}
       userStats={{

@@ -35,6 +35,15 @@ export interface Attachment {
   uploaded_by: string | null;
 }
 
+export interface CardComment {
+  id: string;
+  body: string;
+  created_at: string;
+  user_id: string;
+  full_name: string | null;
+  avatar_url: string | null;
+}
+
 export interface BoardCard {
   id: string;
   list_id: string;
@@ -48,6 +57,8 @@ export interface BoardCard {
   members: BoardMember[];
   checklists: Checklist[];
   attachments: Attachment[];
+  comments: CardComment[];
+  comment_count: number;
 }
 
 export interface BoardList {
@@ -116,12 +127,17 @@ export async function getTaskBoardFull(boardId?: string): Promise<TaskBoardFull 
   const filteredCardLabels = (cardLabels ?? []).filter((cl) => cardIdSet.has(cl.card_id));
   const filteredCardMembers = (cardMembers ?? []).filter((cm) => cardIdSet.has(cm.card_id));
 
-  const [checklistsRes, attachmentsRes] = cardIds.length
+  const [checklistsRes, attachmentsRes, commentsRes] = cardIds.length
     ? await Promise.all([
         supabase.from("task_checklists").select("*").in("card_id", cardIds).order("position"),
         supabase.from("task_attachments").select("*").in("card_id", cardIds).order("created_at"),
+        supabase
+          .from("task_card_comments")
+          .select("id, card_id, body, created_at, user_id, users(full_name, avatar_url)")
+          .in("card_id", cardIds)
+          .order("created_at", { ascending: true }),
       ])
-    : [{ data: [] }, { data: [] }];
+    : [{ data: [] }, { data: [] }, { data: [] }];
 
   const checklistIds = (checklistsRes.data ?? []).map((c) => c.id);
 
@@ -177,6 +193,22 @@ export async function getTaskBoardFull(boardId?: string): Promise<TaskBoardFull 
     attachmentMap.set(att.card_id, existing);
   }
 
+  const commentMap = new Map<string, CardComment[]>();
+  for (const comment of commentsRes.data ?? []) {
+    const raw = comment.users as { full_name: string | null; avatar_url: string | null } | { full_name: string | null; avatar_url: string | null }[] | null;
+    const author = Array.isArray(raw) ? raw[0] : raw;
+    const existing = commentMap.get(comment.card_id) ?? [];
+    existing.push({
+      id: comment.id,
+      body: comment.body,
+      created_at: comment.created_at,
+      user_id: comment.user_id,
+      full_name: author?.full_name ?? null,
+      avatar_url: author?.avatar_url ?? null,
+    });
+    commentMap.set(comment.card_id, existing);
+  }
+
   const enrichedCards: BoardCard[] = (cards ?? []).map((card) => ({
     id: card.id,
     list_id: card.list_id,
@@ -190,6 +222,8 @@ export async function getTaskBoardFull(boardId?: string): Promise<TaskBoardFull 
     members: memberMap.get(card.id) ?? [],
     checklists: checklistMap.get(card.id) ?? [],
     attachments: attachmentMap.get(card.id) ?? [],
+    comments: commentMap.get(card.id) ?? [],
+    comment_count: (commentMap.get(card.id) ?? []).length,
   }));
 
   const listsWithCards: BoardList[] = (lists ?? []).map((list) => ({

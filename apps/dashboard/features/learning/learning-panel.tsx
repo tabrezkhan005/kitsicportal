@@ -3,27 +3,26 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Badge, Button, Card, CardContent, CardHeader, CardTitle } from "@kitsic/ui";
-import { GraduationCap, Plus, Star, Target, Trophy } from "lucide-react";
+import { Gamepad2, GraduationCap, Plus, Star, Target, Trophy } from "lucide-react";
 import { EmptyState } from "@/components/empty-state";
 import { PageCreateButton } from "@/components/page-create-button";
 import { PageHeader } from "@/components/page-header";
 import { Modal } from "@/components/modal";
-import { CreateForm } from "@/components/create-form";
-import { createLearningModule, submitLearningModule } from "@/lib/platform-actions";
+import { submitLearningModule } from "@/lib/platform-actions";
 import { LearningLeaderboard } from "@/features/learning/learning-leaderboard";
-
-interface Question {
-  id: string;
-  prompt: string;
-  answer?: string;
-}
+import { QuizPlayer } from "@/features/learning/quiz-player";
+import { CreateQuizForm } from "@/features/learning/create-quiz-form";
+import { CreateAssignmentForm } from "@/features/learning/create-assignment-form";
+import type { PlayerQuestion } from "@/lib/learning-types";
+import { toActionErrorMessage } from "@/lib/action-error";
 
 interface LearningModule {
   id: string;
   title: string;
   description: string | null;
   type: string;
-  questions: Question[];
+  playerQuestions: PlayerQuestion[];
+  questionCount: number;
   due_date: string | null;
   is_published: boolean;
   submission: { score: number | null; status: string; points_earned?: number } | null;
@@ -65,6 +64,7 @@ export function LearningPanel({
   canManage = false,
 }: LearningPanelProps) {
   const [createOpen, setCreateOpen] = useState(false);
+  const [createAssignmentOpen, setCreateAssignmentOpen] = useState(false);
   const [activeId, setActiveId] = useState<string | null>(null);
 
   const published = canManage ? modules : modules.filter((m) => m.is_published);
@@ -82,8 +82,18 @@ export function LearningPanel({
     <div className="mx-auto max-w-7xl space-y-6">
       <PageHeader
         title="Learning"
-        description="Quizzes and assignments — earn points for the leaderboard"
-        actions={canManage ? <PageCreateButton label="Create module" onClick={() => setCreateOpen(true)} /> : undefined}
+        description="Interactive quizzes with instant feedback — earn points for the leaderboard"
+        actions={
+          canManage ? (
+            <div className="flex flex-wrap gap-2">
+              <PageCreateButton label="Create quiz" onClick={() => setCreateOpen(true)} />
+              <Button type="button" variant="outline" className="font-ui rounded-lg" onClick={() => setCreateAssignmentOpen(true)}>
+                <Plus className="h-4 w-4" />
+                Add assignment
+              </Button>
+            </div>
+          ) : undefined
+        }
       />
 
       <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
@@ -125,15 +135,13 @@ export function LearningPanel({
                     <CardContent className="space-y-3">
                       {module.description && <p className="font-body text-sm text-muted line-clamp-2">{module.description}</p>}
                       <div className="flex flex-wrap gap-2 text-xs text-muted font-body">
-                        {module.questions?.length > 0 && (
-                          <span>{module.questions.length} question{module.questions.length === 1 ? "" : "s"}</span>
+                        {module.questionCount > 0 && (
+                          <span>{module.questionCount} question{module.questionCount === 1 ? "" : "s"}</span>
                         )}
                         {module.type === "quiz" && !module.submission && (
-                          <span>· Up to {module.questions.length * 15 + 25} pts</span>
+                          <span>· Up to {module.questionCount * 15 + 25} pts</span>
                         )}
-                        {module.type === "assignment" && !module.submission && (
-                          <span>· 40 pts on submit</span>
-                        )}
+                        {module.type === "assignment" && !module.submission && <span>· 40 pts on submit</span>}
                         {module.due_date && (
                           <span>· Due {new Date(module.due_date).toLocaleDateString("en-IN", { dateStyle: "medium" })}</span>
                         )}
@@ -150,7 +158,14 @@ export function LearningPanel({
                         </div>
                       ) : (
                         <Button type="button" size="sm" className="font-ui w-full" onClick={() => setActiveId(module.id)}>
-                          Start {module.type}
+                          {module.type === "quiz" ? (
+                            <>
+                              <Gamepad2 className="mr-1.5 h-4 w-4" />
+                              Play quiz
+                            </>
+                          ) : (
+                            `Start ${module.type}`
+                          )}
                         </Button>
                       )}
                     </CardContent>
@@ -166,64 +181,67 @@ export function LearningPanel({
         </div>
       </div>
 
-      <Modal open={!!active} onOpenChange={(open) => !open && setActiveId(null)} title={active?.title ?? "Learning module"}>
-        {active && <ModuleSubmissionForm module={active} onDone={() => setActiveId(null)} />}
+      <Modal
+        open={!!active}
+        onOpenChange={(open) => !open && setActiveId(null)}
+        title={active?.title ?? "Learning module"}
+        size={active?.type === "quiz" ? "wide" : "default"}
+      >
+        {active?.type === "quiz" ? (
+          <QuizPlayer
+            moduleId={active.id}
+            title={active.title}
+            questions={active.playerQuestions}
+            onDone={() => setActiveId(null)}
+          />
+        ) : (
+          active && <AssignmentSubmissionForm module={active} onDone={() => setActiveId(null)} />
+        )}
       </Modal>
 
-      <Modal open={createOpen} onOpenChange={setCreateOpen} title="Create learning module">
-        <CreateForm
-          action={createLearningModule}
-          onSuccess={() => setCreateOpen(false)}
-          fields={[
-            { name: "title", label: "Title", required: true },
-            { name: "description", label: "Description", type: "textarea" },
-            {
-              name: "type",
-              label: "Type",
-              options: [
-                { value: "quiz", label: "Quiz" },
-                { value: "assignment", label: "Assignment" },
-              ],
-            },
-            {
-              name: "questions",
-              label: 'Questions JSON (e.g. [{"id":"q1","prompt":"What is Git?","answer":"VCS"}])',
-              type: "textarea",
-            },
-            { name: "due_date", label: "Due date", type: "datetime-local" },
-            { name: "publish", label: "Publish now", type: "checkbox" },
-          ]}
-        />
+      <Modal open={createOpen} onOpenChange={setCreateOpen} title="Create quiz" size="wide">
+        <CreateQuizForm onSuccess={() => setCreateOpen(false)} />
+      </Modal>
+
+      <Modal open={createAssignmentOpen} onOpenChange={setCreateAssignmentOpen} title="Create assignment">
+        <CreateAssignmentForm onSuccess={() => setCreateAssignmentOpen(false)} />
       </Modal>
     </div>
   );
 }
 
-function ModuleSubmissionForm({ module, onDone }: { module: LearningModule; onDone: () => void }) {
+function AssignmentSubmissionForm({
+  module,
+  onDone,
+}: {
+  module: LearningModule;
+  onDone: () => void;
+}) {
   const router = useRouter();
-  const questions = Array.isArray(module.questions) ? module.questions : [];
-  const [result, setResult] = useState<{ score?: number; pointsEarned?: number } | null>(null);
+  const prompt = module.playerQuestions[0]?.prompt ?? "Your response";
+  const [error, setError] = useState<string | null>(null);
+  const [result, setResult] = useState<{ pointsEarned?: number } | null>(null);
   const [isPending, startTransition] = useTransition();
 
   function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
+    setError(null);
     const formData = new FormData(e.currentTarget);
-    const answers: Record<string, string> = {};
-    for (const q of questions) {
-      answers[q.id] = (formData.get(`answer_${q.id}`) as string) ?? "";
-    }
+    const answer = (formData.get("answer") as string) ?? "";
     formData.set("module_id", module.id);
-    formData.set("answers", JSON.stringify(answers));
+    formData.set("answers", JSON.stringify({ a1: answer }));
 
     startTransition(async () => {
-      const response = await submitLearningModule(formData);
-      if (response.data) {
-        setResult(response.data as { score?: number; pointsEarned?: number });
+      try {
+        const response = await submitLearningModule(formData);
+        if (response.error) {
+          setError(response.error);
+          return;
+        }
+        setResult(response.data as { pointsEarned?: number });
         router.refresh();
-        setTimeout(onDone, 2000);
-      } else {
-        onDone();
-        router.refresh();
+      } catch (err) {
+        setError(toActionErrorMessage(err, "Could not submit assignment."));
       }
     });
   }
@@ -235,35 +253,31 @@ function ModuleSubmissionForm({ module, onDone }: { module: LearningModule; onDo
           <Trophy className="h-8 w-8 text-accent" />
         </div>
         <p className="font-display text-xl font-bold text-primary">Submitted!</p>
-        {result.score != null && <p className="font-body text-muted">Quiz score: {result.score}%</p>}
         {result.pointsEarned != null && (
           <p className="font-ui text-lg font-semibold text-accent">+{result.pointsEarned} points earned</p>
         )}
+        <Button type="button" className="w-full rounded-xl font-ui" onClick={onDone}>
+          Done
+        </Button>
       </div>
     );
   }
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
-      {questions.map((q, index) => (
-        <label key={q.id} className="block space-y-1.5">
-          <span className="font-ui text-sm font-semibold text-primary">
-            {index + 1}. {q.prompt}
-          </span>
-          <textarea
-            name={`answer_${q.id}`}
-            required={module.type === "quiz"}
-            rows={module.type === "assignment" ? 4 : 2}
-            disabled={isPending}
-            className="w-full rounded-lg border border-[var(--dashboard-border)] px-3 py-2 font-body text-sm"
-            placeholder={module.type === "quiz" ? "Your answer" : "Write your response"}
-          />
-        </label>
-      ))}
-      {questions.length === 0 && (
-        <p className="font-body text-sm text-muted">No questions configured for this module.</p>
-      )}
-      <Button type="submit" disabled={isPending} className="font-ui w-full">
+      {error && <p className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}
+      <label className="block space-y-1.5">
+        <span className="font-ui text-sm font-semibold text-primary">{prompt}</span>
+        <textarea
+          name="answer"
+          required
+          rows={5}
+          disabled={isPending}
+          className="w-full rounded-xl border border-[var(--dashboard-border)] px-3 py-2 font-body text-sm"
+          placeholder="Write your response…"
+        />
+      </label>
+      <Button type="submit" disabled={isPending} className="font-ui w-full rounded-xl">
         {isPending ? "Submitting…" : "Submit & earn points"}
       </Button>
     </form>

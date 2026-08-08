@@ -4,6 +4,7 @@ import {
   isValidMemberIdFormat,
   scoreQuizAnswers,
 } from "@/lib/learning-points";
+import { gradeAnswer, normalizeQuestion } from "@/lib/learning-questions";
 
 const questions = [
   { id: "q1", answer: "git init" },
@@ -50,5 +51,38 @@ describe("learning-points", () => {
     expect(isValidMemberIdFormat("IC100")).toBe(true);
     expect(isValidMemberIdFormat("KITSIC-2026-0001")).toBe(false);
     expect(isValidMemberIdFormat("ic01")).toBe(false);
+  });
+});
+
+describe("learning-questions", () => {
+  it("grades mcq answers by option index", () => {
+    const question = normalizeQuestion({
+      id: "m1",
+      type: "mcq",
+      prompt: "Pick one",
+      options: ["Alpha", "Beta", "Gamma"],
+      correctIndex: 1,
+      explanation: "Beta is correct because…",
+    });
+
+    const correct = gradeAnswer(question, "1");
+    expect(correct.correct).toBe(true);
+    expect(correct.explanation).toBe("Beta is correct because…");
+
+    const wrong = gradeAnswer(question, "0");
+    expect(wrong.correct).toBe(false);
+    expect(wrong.correctAnswer).toBe("Beta");
+  });
+
+  it("grades true/false answers", () => {
+    const question = normalizeQuestion({
+      id: "t1",
+      type: "true_false",
+      prompt: "Git is a version control system",
+      answer: "true",
+    });
+
+    expect(gradeAnswer(question, "true").correct).toBe(true);
+    expect(gradeAnswer(question, "false").correct).toBe(false);
   });
 });

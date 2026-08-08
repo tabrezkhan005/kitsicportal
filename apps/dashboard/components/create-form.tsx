@@ -3,6 +3,7 @@
 import { Button, Input, Label } from "@kitsic/ui";
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
+import { toActionErrorMessage } from "@/lib/action-error";
 
 interface CreateFormProps {
   action: (formData: FormData) => Promise<{ success?: boolean; error?: string; data?: Record<string, unknown> }>;
@@ -30,14 +31,18 @@ export function CreateForm({ action, fields, hiddenValues, submitLabel = "Create
     const formData = new FormData(e.currentTarget);
 
     startTransition(async () => {
-      const result = await action(formData);
-      if (result.error) {
-        setError(result.error);
-        return;
+      try {
+        const result = await action(formData);
+        if (result.error) {
+          setError(result.error);
+          return;
+        }
+        onSuccess?.(result.data);
+        router.refresh();
+        (e.target as HTMLFormElement).reset();
+      } catch (err) {
+        setError(toActionErrorMessage(err, "Something went wrong. Please try again."));
       }
-      onSuccess?.(result.data);
-      router.refresh();
-      (e.target as HTMLFormElement).reset();
     });
   }
 

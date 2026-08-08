@@ -5,6 +5,7 @@ import { createAdminClient, logAuditEvent } from "@kitsic/database";
 import { revalidatePath } from "next/cache";
 import { headers } from "next/headers";
 import type { ActionResult } from "@/lib/actions";
+import { createNotification } from "@/lib/notify";
 
 async function requireAuth() {
   const user = await getSessionUser();
@@ -138,6 +139,7 @@ export async function createCard(listId: string, boardId: string, title: string)
     .single();
 
   if (error) return { error: error.message };
+  await supabase.from("task_card_members").insert({ card_id: data.id, user_id: user.id });
   await writeAudit(user.id, "card.create", "task_card", data.id, { title });
   revalidateBoard();
   return { success: true, data: { id: data.id } };
@@ -213,6 +215,29 @@ export async function createLabel(
   return { success: true, data: { id: data.id } };
 }
 
+export async function updateLabel(
+  labelId: string,
+  updates: { name?: string; color?: string },
+): Promise<ActionResult> {
+  const user = await requireAuth();
+  const supabase = createAdminClient();
+  const { error } = await supabase.from("task_labels").update(updates).eq("id", labelId);
+  if (error) return { error: error.message };
+  await writeAudit(user.id, "label.update", "task_label", labelId, updates);
+  revalidateBoard();
+  return { success: true };
+}
+
+export async function deleteLabel(labelId: string): Promise<ActionResult> {
+  const user = await requireAuth();
+  const supabase = createAdminClient();
+  const { error } = await supabase.from("task_labels").delete().eq("id", labelId);
+  if (error) return { error: error.message };
+  await writeAudit(user.id, "label.delete", "task_label", labelId);
+  revalidateBoard();
+  return { success: true };
+}
+
 export async function toggleCardLabel(cardId: string, labelId: string, add: boolean): Promise<ActionResult> {
   const user = await requireAuth();
   const supabase = createAdminClient();
@@ -236,6 +261,26 @@ export async function toggleCardLabel(cardId: string, labelId: string, add: bool
 
 // ─── Members ─────────────────────────────────────────────────────────────────
 
+async function notifyCardAssignment(
+  cardId: string,
+  assigneeId: string,
+  assignerId: string,
+  assignerName: string | null,
+) {
+  if (assigneeId === assignerId) return;
+
+  const supabase = createAdminClient();
+  const { data: card } = await supabase.from("task_cards").select("title").eq("id", cardId).single();
+  if (!card) return;
+
+  await createNotification({
+    userId: assigneeId,
+    title: "Task assigned to you",
+    message: `${assignerName ?? "A club member"} added you to "${card.title}" on the club board.`,
+    type: "task",
+  });
+}
+
 export async function toggleCardMember(cardId: string, userId: string, add: boolean): Promise<ActionResult> {
   const user = await requireAuth();
   const supabase = createAdminClient();
@@ -243,6 +288,13 @@ export async function toggleCardMember(cardId: string, userId: string, add: bool
   if (add) {
     const { error } = await supabase.from("task_card_members").insert({ card_id: cardId, user_id: userId });
     if (error) return { error: error.message };
+
+    const { data: assigner } = await supabase
+      .from("users")
+      .select("full_name")
+      .eq("id", user.id)
+      .single();
+    await notifyCardAssignment(cardId, userId, user.id, assigner?.full_name ?? null);
   } else {
     const { error } = await supabase
       .from("task_card_members")
@@ -253,6 +305,61 @@ export async function toggleCardMember(cardId: string, userId: string, add: bool
   }
 
   await writeAudit(user.id, "card.member", "task_card", cardId, { userId, add });
+  revalidateBoard();
+  return { success: true };
+}
+
+// ─── Comments ────────────────────────────────────────────────────────────────
+
+async function notifyCardComment(cardId: string, authorId: string, authorName: string | null, body: string) {
+  const supabase = createAdminClient();
+  const [{ data: card }, { data: members }] = await Promise.all([
+    supabase.from("task_cards").select("title").eq("id", cardId).single(),
+    supabase.from("task_card_members").select("user_id").eq("card_id", cardId),
+  ]);
+
+  if (!card) return;
+
+  const preview = body.length > 120 ? `${body.slice(0, 117)}…` : body;
+  const recipientIds = new Set((members ?? []).map((m) => m.user_id).filter((id) => id !== authorId));
+
+  for (const recipientId of recipientIds) {
+    await createNotification({
+      userId: recipientId,
+      title: `New comment on "${card.title}"`,
+      message: `${authorName ?? "A club member"} commented: ${preview}`,
+      type: "task",
+      sendEmail: false,
+    });
+  }
+}
+
+export async function addCardComment(cardId: string, body: string): Promise<ActionResult> {
+  const user = await requireAuth();
+  const trimmed = body.trim();
+  if (!trimmed) return { error: "Comment cannot be empty" };
+
+  const supabase = createAdminClient();
+  const { data, error } = await supabase
+    .from("task_card_comments")
+    .insert({ card_id: cardId, user_id: user.id, body: trimmed })
+    .select("id")
+    .single();
+
+  if (error) return { error: error.message };
+
+  await writeAudit(user.id, "card.comment.add", "task_card_comment", data.id, { cardId });
+  await notifyCardComment(cardId, user.id, user.fullName ?? null, trimmed);
+  revalidateBoard();
+  return { success: true, data: { id: data.id } };
+}
+
+export async function deleteCardComment(commentId: string): Promise<ActionResult> {
+  const user = await requireAuth();
+  const supabase = createAdminClient();
+  const { error } = await supabase.from("task_card_comments").delete().eq("id", commentId);
+  if (error) return { error: error.message };
+  await writeAudit(user.id, "card.comment.delete", "task_card_comment", commentId);
   revalidateBoard();
   return { success: true };
 }

@@ -1,18 +1,25 @@
+import { gradeAnswer, normalizeQuestions } from "@/lib/learning-questions";
+import type { LearningQuestion } from "@/lib/learning-types";
+
 export interface QuizQuestion {
   id: string;
   answer?: string;
+  type?: string;
+  options?: string[];
+  correctIndex?: number;
+  acceptableAnswers?: string[];
+  prompt?: string;
 }
 
 export function scoreQuizAnswers(
   questions: QuizQuestion[],
   answers: Record<string, string>,
 ): { score: number; correct: number; total: number } {
-  const total = questions.length;
+  const normalized = normalizeQuestions(questions as LearningQuestion[]);
+  const total = normalized.length;
   if (total === 0) return { score: 0, correct: 0, total: 0 };
 
-  const correct = questions.filter(
-    (q) => answers[q.id]?.trim().toLowerCase() === q.answer?.trim().toLowerCase(),
-  ).length;
+  const correct = normalized.filter((question) => gradeAnswer(question, answers[question.id] ?? "").correct).length;
 
   return {
     correct,

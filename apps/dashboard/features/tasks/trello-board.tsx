@@ -22,12 +22,16 @@ import {
 import { CSS } from "@dnd-kit/utilities";
 import { Avatar, AvatarFallback, AvatarImage, Button } from "@kitsic/ui";
 import {
+  AlignLeft,
   Calendar,
   CheckSquare,
+  Filter,
   GripVertical,
   LayoutGrid,
+  MessageSquare,
   Paperclip,
   Plus,
+  Users,
   X,
 } from "lucide-react";
 import { cn } from "@kitsic/utils";
@@ -38,6 +42,7 @@ import { createCard, createList, moveCard } from "@/lib/board-actions";
 interface TrelloBoardProps {
   board: TaskBoardFull;
   members: ClubMemberOption[];
+  currentUserId: string;
 }
 
 const LIST_ACCENTS: Record<string, string> = {
@@ -46,6 +51,14 @@ const LIST_ACCENTS: Record<string, string> = {
   "under review": "border-t-secondary",
   done: "border-t-emerald-500",
 };
+
+function labelTextColor(hex: string) {
+  const r = parseInt(hex.slice(1, 3), 16);
+  const g = parseInt(hex.slice(3, 5), 16);
+  const b = parseInt(hex.slice(5, 7), 16);
+  const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+  return luminance > 0.62 ? "#172b4d" : "#ffffff";
+}
 
 const SortableCard = memo(function SortableCard({
   card,
@@ -66,8 +79,15 @@ const SortableCard = memo(function SortableCard({
   );
 
   const dueSoon =
-    card.due_date &&
-    new Date(card.due_date).getTime() - Date.now() < 86400000 * 2;
+    card.due_date && new Date(card.due_date).getTime() - Date.now() < 86400000 * 2;
+
+  const hasMeta =
+    card.due_date ||
+    checklistTotal > 0 ||
+    card.attachments.length > 0 ||
+    card.members.length > 0 ||
+    card.comment_count > 0 ||
+    card.description;
 
   return (
     <div
@@ -77,9 +97,9 @@ const SortableCard = memo(function SortableCard({
         transition: transition ?? "transform 200ms cubic-bezier(0.25, 1.1, 0.4, 1)",
       }}
       className={cn(
-        "group touch-manipulation cursor-pointer rounded-xl border border-primary/8 bg-white p-3 shadow-[0_1px_3px_rgba(3,53,101,0.06)]",
-        "transition-shadow duration-200 hover:border-accent/25 hover:shadow-[0_8px_20px_rgba(3,53,101,0.1)]",
-        isDragging && "scale-[1.02] opacity-50 shadow-lg",
+        "group touch-manipulation cursor-pointer rounded-xl border border-primary/8 bg-white p-3 shadow-[0_1px_2px_rgba(3,53,101,0.05)]",
+        "transition-all duration-200 hover:-translate-y-0.5 hover:border-accent/30 hover:shadow-[0_10px_24px_rgba(3,53,101,0.12)]",
+        isDragging && "scale-[1.02] opacity-55 shadow-lg",
       )}
       onClick={() => onOpen(card)}
     >
@@ -88,10 +108,15 @@ const SortableCard = memo(function SortableCard({
           {card.labels.map((label) => (
             <span
               key={label.id}
-              className="h-2 min-w-[2.5rem] rounded-full"
-              style={{ backgroundColor: label.color }}
+              className="max-w-full truncate rounded-md px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide"
+              style={{
+                backgroundColor: label.color,
+                color: labelTextColor(label.color),
+              }}
               title={label.name}
-            />
+            >
+              {label.name}
+            </span>
           ))}
         </div>
       )}
@@ -107,7 +132,7 @@ const SortableCard = memo(function SortableCard({
         </button>
         <p className="flex-1 text-sm font-semibold leading-snug text-primary font-ui">{card.title}</p>
       </div>
-      {(card.due_date || checklistTotal > 0 || card.attachments.length > 0 || card.members.length > 0) && (
+      {hasMeta && (
         <div className="mt-2.5 flex flex-wrap items-center gap-2">
           {card.due_date && (
             <span
@@ -131,6 +156,17 @@ const SortableCard = memo(function SortableCard({
               {checklistDone}/{checklistTotal}
             </span>
           )}
+          {card.description && (
+            <span className="flex items-center text-[11px] text-primary/45" title="Has description">
+              <AlignLeft className="h-3 w-3" />
+            </span>
+          )}
+          {card.comment_count > 0 && (
+            <span className="flex items-center gap-1 text-[11px] text-primary/45">
+              <MessageSquare className="h-3 w-3" />
+              {card.comment_count}
+            </span>
+          )}
           {card.attachments.length > 0 && (
             <span className="flex items-center gap-1 text-[11px] text-primary/45">
               <Paperclip className="h-3 w-3" />
@@ -139,7 +175,7 @@ const SortableCard = memo(function SortableCard({
           )}
           {card.members.length > 0 && (
             <div className="ml-auto flex -space-x-1.5">
-              {card.members.slice(0, 3).map((m) => (
+              {card.members.slice(0, 4).map((m) => (
                 <Avatar key={m.user_id} className="h-6 w-6 border-2 border-white">
                   <AvatarImage src={m.avatar_url ?? undefined} />
                   <AvatarFallback name={m.full_name} className="text-[8px]" />
@@ -155,12 +191,10 @@ const SortableCard = memo(function SortableCard({
 
 function ListColumn({
   list,
-  boardId,
   onOpenCard,
   onAddCard,
 }: {
   list: BoardList;
-  boardId: string;
   onOpenCard: (card: BoardCard) => void;
   onAddCard: (listId: string, title: string) => void;
 }) {
@@ -181,14 +215,14 @@ function ListColumn({
     <div
       ref={setNodeRef}
       className={cn(
-        "flex max-h-[calc(100vh-11rem)] w-[17.5rem] shrink-0 flex-col rounded-2xl border border-primary/8 border-t-4 bg-white/80 p-2.5 backdrop-blur-sm",
+        "flex max-h-[calc(100dvh-15rem)] w-[17.5rem] shrink-0 flex-col rounded-2xl border border-primary/8 border-t-4 bg-[#ebecf0]/95 p-2.5 backdrop-blur-sm",
         accent,
         isOver && "ring-2 ring-accent/40 ring-offset-2",
       )}
     >
       <div className="mb-2 flex items-center justify-between px-1.5 pt-0.5">
         <h3 className="font-ui text-sm font-bold text-primary">{list.name}</h3>
-        <span className="rounded-full bg-primary/8 px-2 py-0.5 text-[11px] font-semibold text-primary/50">
+        <span className="rounded-full bg-white/80 px-2 py-0.5 text-[11px] font-semibold text-primary/50">
           {list.cards.length}
         </span>
       </div>
@@ -230,7 +264,7 @@ function ListColumn({
         <button
           type="button"
           onClick={() => setAdding(true)}
-          className="mt-2 flex w-full items-center gap-2 rounded-xl px-2 py-2.5 text-sm text-primary/50 transition-colors hover:bg-primary/5 hover:text-primary font-ui"
+          className="mt-2 flex w-full items-center gap-2 rounded-xl px-2 py-2.5 text-sm text-primary/50 transition-colors hover:bg-white/70 hover:text-primary font-ui"
         >
           <Plus className="h-4 w-4" />
           Add a card
@@ -240,13 +274,14 @@ function ListColumn({
   );
 }
 
-export function TrelloBoard({ board, members }: TrelloBoardProps) {
+export function TrelloBoard({ board, members, currentUserId }: TrelloBoardProps) {
   const router = useRouter();
   const [lists, setLists] = useState(board.lists);
   const [activeCard, setActiveCard] = useState<BoardCard | null>(null);
   const [selectedCardId, setSelectedCardId] = useState<string | null>(null);
   const [newListName, setNewListName] = useState("");
   const [showNewList, setShowNewList] = useState(false);
+  const [myTasksOnly, setMyTasksOnly] = useState(false);
   const [, startTransition] = useTransition();
 
   useEffect(() => {
@@ -255,12 +290,21 @@ export function TrelloBoard({ board, members }: TrelloBoardProps) {
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }));
 
-  const allCards = useMemo(() => lists.flatMap((l) => l.cards), [lists]);
-  const selectedCard = selectedCardId
-    ? allCards.find((c) => c.id === selectedCardId) ?? null
-    : null;
+  const filteredLists = useMemo(() => {
+    if (!myTasksOnly) return lists;
+    return lists.map((list) => ({
+      ...list,
+      cards: list.cards.filter((card) => card.members.some((m) => m.user_id === currentUserId)),
+    }));
+  }, [lists, myTasksOnly, currentUserId]);
 
-  const totalCards = allCards.length;
+  const allCards = useMemo(() => filteredLists.flatMap((l) => l.cards), [filteredLists]);
+  const selectedCard = selectedCardId ? allCards.find((c) => c.id === selectedCardId) ?? null : null;
+
+  const totalCards = lists.flatMap((l) => l.cards).length;
+  const myTaskCount = lists
+    .flatMap((l) => l.cards)
+    .filter((c) => c.members.some((m) => m.user_id === currentUserId)).length;
 
   const applyMove = useCallback((cardId: string, targetListId: string, targetIndex: number) => {
     setLists((prev) => {
@@ -310,7 +354,7 @@ export function TrelloBoard({ board, members }: TrelloBoardProps) {
       const targetList = lists.find((l) => l.id === targetListId);
       targetIndex = targetList?.cards.length ?? 0;
     } else {
-      const overCard = allCards.find((c) => c.id === over.id);
+      const overCard = lists.flatMap((l) => l.cards).find((c) => c.id === over.id);
       if (!overCard) return;
       targetListId = overCard.list_id;
       const targetList = lists.find((l) => l.id === targetListId);
@@ -351,12 +395,12 @@ export function TrelloBoard({ board, members }: TrelloBoardProps) {
       members: [],
       checklists: [],
       attachments: [],
+      comments: [],
+      comment_count: 0,
     };
 
     setLists((prev) =>
-      prev.map((list) =>
-        list.id === listId ? { ...list, cards: [...list.cards, optimistic] } : list,
-      ),
+      prev.map((list) => (list.id === listId ? { ...list, cards: [...list.cards, optimistic] } : list)),
     );
 
     startTransition(async () => {
@@ -365,12 +409,11 @@ export function TrelloBoard({ board, members }: TrelloBoardProps) {
         setLists((prev) =>
           prev.map((list) => ({
             ...list,
-            cards: list.cards.map((c) =>
-              c.id === tempId ? { ...c, id: result.data!.id as string } : c,
-            ),
+            cards: list.cards.map((c) => (c.id === tempId ? { ...c, id: result.data!.id as string } : c)),
           })),
         );
       }
+      router.refresh();
     });
   }
 
@@ -390,25 +433,45 @@ export function TrelloBoard({ board, members }: TrelloBoardProps) {
 
   return (
     <div className="relative">
-      {/* Board toolbar */}
-      <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-primary/10 bg-white/90 px-4 py-3 backdrop-blur-sm">
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-primary/10 bg-white/95 px-4 py-3 backdrop-blur-sm">
         <div className="flex items-center gap-3">
           <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary/8">
             <LayoutGrid className="h-4 w-4 text-primary" />
           </div>
           <div>
             <p className="font-ui text-sm font-bold text-primary">{board.name}</p>
-            <p className="font-body text-xs text-primary/45">{totalCards} cards · drag to reorder</p>
+            <p className="font-body text-xs text-primary/45">
+              {totalCards} cards · drag to reorder · add labels, teams & checklists
+            </p>
           </div>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="hidden items-center gap-1.5 rounded-xl border border-primary/10 bg-primary/3 px-2 py-1 sm:flex">
+            <Users className="h-3.5 w-3.5 text-primary/45" />
+            <div className="flex -space-x-1.5">
+              {members.slice(0, 6).map((member) => (
+                <Avatar key={member.id} className="h-6 w-6 border-2 border-white" title={member.full_name ?? member.email}>
+                  <AvatarImage src={member.avatar_url ?? undefined} />
+                  <AvatarFallback name={member.full_name} className="text-[8px]" />
+                </Avatar>
+              ))}
+            </div>
+          </div>
+          <Button
+            type="button"
+            size="sm"
+            variant={myTasksOnly ? "default" : "outline"}
+            className="rounded-xl"
+            onClick={() => setMyTasksOnly((prev) => !prev)}
+          >
+            <Filter className="mr-1.5 h-3.5 w-3.5" />
+            My tasks{myTaskCount > 0 ? ` (${myTaskCount})` : ""}
+          </Button>
         </div>
       </div>
 
-      <div
-        className="relative min-h-[calc(100vh-13rem)] overflow-hidden rounded-2xl p-4"
-        style={{
-          background: `linear-gradient(135deg, ${board.background_color} 0%, #044a8a 100%)`,
-        }}
-      >
+      <div className="relative min-h-[calc(100dvh-14rem)] overflow-hidden rounded-2xl border border-primary/8 bg-[#f4f5f7] p-3 sm:p-4">
         <DndContext
           sensors={sensors}
           collisionDetection={closestCorners}
@@ -416,18 +479,17 @@ export function TrelloBoard({ board, members }: TrelloBoardProps) {
           onDragEnd={handleDragEnd}
         >
           <div className="flex gap-3 overflow-x-auto pb-2">
-            {lists.map((list) => (
+            {filteredLists.map((list) => (
               <ListColumn
                 key={list.id}
                 list={list}
-                boardId={board.id}
                 onOpenCard={(card) => setSelectedCardId(card.id)}
                 onAddCard={handleAddCard}
               />
             ))}
 
             {showNewList ? (
-              <div className="w-[17.5rem] shrink-0 rounded-2xl bg-white/90 p-3 backdrop-blur-sm">
+              <div className="w-[17.5rem] shrink-0 rounded-2xl bg-[#ebecf0] p-3">
                 <input
                   value={newListName}
                   onChange={(e) => setNewListName(e.target.value)}
@@ -449,7 +511,7 @@ export function TrelloBoard({ board, members }: TrelloBoardProps) {
               <button
                 type="button"
                 onClick={() => setShowNewList(true)}
-                className="flex h-fit w-[17.5rem] shrink-0 items-center gap-2 rounded-2xl border border-white/20 bg-white/10 px-4 py-3 text-sm font-semibold text-white backdrop-blur-sm transition-colors hover:bg-white/20 font-ui"
+                className="flex h-fit w-[17.5rem] shrink-0 items-center gap-2 rounded-2xl border border-primary/12 bg-white/70 px-4 py-3 text-sm font-semibold text-primary/70 transition-colors hover:bg-white font-ui"
               >
                 <Plus className="h-4 w-4" />
                 Add another list
@@ -459,7 +521,7 @@ export function TrelloBoard({ board, members }: TrelloBoardProps) {
 
           <DragOverlay dropAnimation={{ duration: 200, easing: "cubic-bezier(0.25, 1.1, 0.4, 1)" }}>
             {activeCard ? (
-              <div className="w-[17.5rem] rotate-2 rounded-xl border border-accent/30 bg-white p-3 shadow-2xl">
+              <div className="w-[17.5rem] rotate-1 rounded-xl border border-accent/30 bg-white p-3 shadow-2xl">
                 <p className="text-sm font-semibold text-primary font-ui">{activeCard.title}</p>
               </div>
             ) : null}
@@ -470,8 +532,10 @@ export function TrelloBoard({ board, members }: TrelloBoardProps) {
       {selectedCard && (
         <CardDetailPanel
           card={selectedCard}
+          boardId={board.id}
           boardLabels={board.labels}
           members={members}
+          currentUserId={currentUserId}
           onClose={() => setSelectedCardId(null)}
           onUpdate={handlePanelUpdate}
         />

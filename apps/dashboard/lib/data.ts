@@ -1,6 +1,7 @@
 import { createAdminClient } from "@kitsic/database";
 import { getAvatarColorForUser } from "@/lib/avatar-color";
 import { filterLeaderboardForViewer } from "@/lib/leaderboard-utils";
+import { ACTIVE_HEAD_ROLE_SLUGS } from "@/lib/leadership-roles";
 import { getBoardCardStats, getTaskBoardFull } from "@/lib/board-data";
 
 export async function getDashboardStats() {
@@ -200,8 +201,6 @@ export async function getAnalyticsData() {
   return { tasksByStatus, tasksByPriority, memberGrowth, attendanceTrend, departmentActivity };
 }
 
-const LEADERSHIP_ROLE_SLUGS = ["president", "vice_president", "secretary", "treasurer"] as const;
-
 function parseRoleRelation(
   role: { name: string; slug: string } | { name: string; slug: string }[] | null,
 ) {
@@ -215,7 +214,7 @@ async function fetchMembersBase() {
   const [{ data: users }, { data: roleLinks }] = await Promise.all([
     supabase
       .from("users")
-      .select("id, email, full_name, avatar_url, avatar_color, created_at, roll_number, branch, member_id, skills, department:department_id(name, slug)")
+      .select("id, email, full_name, avatar_url, avatar_color, created_at, roll_number, branch, phone, member_id, skills, department:department_id(name, slug)")
       .order("created_at", { ascending: false }),
     supabase.from("user_roles").select("user_id, roles(name, slug)"),
   ]);
@@ -248,6 +247,9 @@ async function fetchMembersBase() {
       roles: roleData.names,
       roleSlugs: roleData.slugs,
       member_id: user.member_id as string | null,
+      roll_number: user.roll_number as string | null,
+      branch: user.branch as string | null,
+      phone: user.phone as string | null,
       skills: (user.skills as string[] | null) ?? [],
       avatar_color: getAvatarColorForUser(user.id as string),
     };
@@ -271,7 +273,7 @@ export async function getMembersPageData() {
   const stats = {
     total: members.length,
     leadership: members.filter((member) =>
-      member.roleSlugs.some((slug) => LEADERSHIP_ROLE_SLUGS.includes(slug as (typeof LEADERSHIP_ROLE_SLUGS)[number])),
+      member.roleSlugs.some((slug) => ACTIVE_HEAD_ROLE_SLUGS.includes(slug as (typeof ACTIVE_HEAD_ROLE_SLUGS)[number])),
     ).length,
     newThisMonth: members.filter((member) => new Date(member.created_at) >= monthStart).length,
     activeContributors: members.filter((member) => member.contributionScore > 0).length,

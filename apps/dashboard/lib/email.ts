@@ -62,6 +62,25 @@ export async function sendOtpEmail(to: string, otp: string) {
   });
 }
 
+export async function sendPasswordResetEmail(to: string, otp: string) {
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
+  return sendEmail({
+    to,
+    subject: "Reset your KITSIC password",
+    text: `Your KITSIC password reset code is ${otp}. It expires in 10 minutes. Open ${appUrl}/login to reset your password.`,
+    html: `
+      <div style="font-family:Inter,Arial,sans-serif;max-width:480px;margin:0 auto;padding:24px">
+        <h2 style="color:#033565;margin:0 0 12px">KITS Innovation Club</h2>
+        <p style="color:#5a7290;line-height:1.5">Use this code to reset your portal password:</p>
+        <p style="font-size:28px;font-weight:700;letter-spacing:6px;color:#033565;margin:24px 0">${otp}</p>
+        <p style="color:#5a7290;line-height:1.6">Enter this code on the login page under <strong>Forgot password</strong>.</p>
+        <a href="${appUrl}/login" style="display:inline-block;margin-top:20px;background:#033565;color:#fefefe;padding:10px 16px;border-radius:8px;text-decoration:none;font-weight:600">Open login</a>
+        <p style="color:#5a7290;font-size:13px;margin-top:20px">This code expires in 10 minutes. If you did not request a reset, ignore this email.</p>
+      </div>
+    `,
+  });
+}
+
 export async function sendNotificationEmail(to: string, title: string, message: string) {
   const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
   return sendEmail({

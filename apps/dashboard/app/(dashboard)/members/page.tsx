@@ -27,6 +27,8 @@ export default async function MembersPage() {
       hub={hub}
       canAssignRoles={user.permissions.includes("roles.assign")}
       canIssueCertificates={user.permissions.includes("certificates.manage")}
+      canDeleteMembers={user.permissions.includes("members.delete")}
+      currentUserId={user.id}
     />
   );
 }

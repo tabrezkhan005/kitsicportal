@@ -441,6 +441,19 @@ export async function assignMemberRole(userId: string, roleSlug: string): Promis
   return { success: true };
 }
 
+export async function deleteMember(userId: string): Promise<ActionResult> {
+  const actor = await requirePermission("members.delete");
+  if (actor.id === userId) return { error: "You cannot delete your own account." };
+
+  const { deleteUserCompletely } = await import("@/lib/delete-user");
+  const result = await deleteUserCompletely(userId);
+  if (!result.ok) return { error: result.error ?? "Could not delete member." };
+
+  await writeAudit(actor.id, "member.delete", "user", userId);
+  revalidateDashboard("/members");
+  return { success: true };
+}
+
 // ─── Notifications ───────────────────────────────────────────────────────────
 
 export async function markNotificationRead(id: string): Promise<ActionResult> {

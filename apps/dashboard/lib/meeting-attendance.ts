@@ -2,18 +2,7 @@ import "server-only";
 
 import { createAdminClient } from "@kitsic/database";
 import { computePresentThresholdMinutes } from "@/lib/google/config";
-
-const HEAD_ROLE_SLUGS = [
-  "president",
-  "vice_president",
-  "secretary",
-  "treasurer",
-  "technical_head",
-  "social_media_head",
-  "resource_head",
-  "logistics_head",
-  "student_lead",
-] as const;
+import { isHeadRole } from "@/lib/leadership-roles";
 
 export interface MeetingAttendanceRow {
   userId: string;
@@ -108,9 +97,7 @@ export async function getMeetingAttendanceSummary(meetingId: string): Promise<Me
   const rows: MeetingAttendanceRow[] = (users ?? []).map((user) => {
     const roleData = rolesByUser.get(user.id) ?? { names: ["Member"], slugs: ["member"] };
     const record = recordByUser.get(user.id);
-    const isLeadership = roleData.slugs.some((slug) =>
-      HEAD_ROLE_SLUGS.includes(slug as (typeof HEAD_ROLE_SLUGS)[number]),
-    );
+    const isLeadership = roleData.slugs.some((slug) => isHeadRole(slug));
 
     return {
       userId: user.id,

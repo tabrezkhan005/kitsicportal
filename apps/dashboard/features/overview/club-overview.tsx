@@ -17,6 +17,8 @@ import {
 import { Badge } from "@kitsic/ui";
 import type { SessionUser } from "@kitsic/types";
 import type { getOverviewData } from "@/lib/data";
+import { getRoleDashboardConfig, userHasHeadRole } from "@/lib/leadership-roles";
+import { RoleDashboardPanel } from "@/features/overview/role-dashboard-panel";
 
 type OverviewData = Awaited<ReturnType<typeof getOverviewData>>;
 
@@ -75,9 +77,9 @@ const QUICK_ACTIONS = [
 ] as const;
 
 export function ClubOverview({ user, data }: ClubOverviewProps) {
-  const isLeadership = user.roles.some((role) =>
-    ["president", "vice_president", "secretary", "treasurer"].includes(role),
-  );
+  const isLeadership = userHasHeadRole(user.roles);
+
+  const roleDashboard = getRoleDashboardConfig(user.roles);
 
   const firstName = user.fullName?.split(" ")[0] ?? "Member";
 
@@ -131,6 +133,19 @@ export function ClubOverview({ user, data }: ClubOverviewProps) {
           </div>
         </div>
       </section>
+
+      {roleDashboard && (
+        <RoleDashboardPanel
+          config={roleDashboard}
+          stats={{
+            memberCount: data.stats.memberCount,
+            taskCompletionRate: data.stats.taskCompletionRate,
+            upcomingEventCount: data.stats.upcomingEventCount,
+            attendanceRate: data.stats.attendanceRate,
+            meetingCount: data.stats.meetingCount,
+          }}
+        />
+      )}
 
       {/* KPI strip */}
       <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">

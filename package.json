@@ -22,6 +22,7 @@
     "db:migrate:task-comments": "npm run migrate:task-comments --workspace=@kitsic/database",
     "db:migrate:google-meet": "npm run migrate:google-meet --workspace=@kitsic/database",
     "db:migrate:meeting-mom": "npm run migrate:meeting-mom --workspace=@kitsic/database",
+    "db:migrate:leadership-roles": "npm run migrate:leadership-roles --workspace=@kitsic/database",
     "db:seed": "npm run seed --workspace=@kitsic/database",
     "db:seed:demo": "npm run seed:demo --workspace=@kitsic/database",
     "db:cleanup:demo": "npm run cleanup:demo --workspace=@kitsic/database",

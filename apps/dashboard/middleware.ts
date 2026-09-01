@@ -1,7 +1,7 @@
 import { updateSession } from "@kitsic/auth/middleware";
 import { type NextRequest, NextResponse } from "next/server";
 
-const publicRoutes = ["/login", "/signup", "/auth/callback", "/auth/confirm"];
+const publicRoutes = ["/login", "/signup", "/signup/leadership", "/auth/callback", "/auth/confirm"];
 
 function isPublicPath(pathname: string) {
   if (publicRoutes.some((route) => pathname.startsWith(route))) return true;
@@ -31,7 +31,7 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(url);
   }
 
-  if (user && (pathname === "/login" || pathname === "/signup")) {
+  if (user && (pathname === "/login" || pathname === "/signup" || pathname === "/signup/leadership")) {
     const url = request.nextUrl.clone();
     url.pathname = "/";
     return NextResponse.redirect(url);

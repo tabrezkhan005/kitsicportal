@@ -5,8 +5,9 @@ import { createAdminClient, logAuditEvent } from "@kitsic/database";
 import { headers } from "next/headers";
 import { toActionErrorMessage } from "@/lib/action-error";
 import { runCompleteSignup } from "@/lib/complete-signup";
-import { sendOtpEmail } from "@/lib/email";
-import { storeOtp } from "@/lib/otp";
+import { resolveUsernameToEmail } from "@/lib/auth-resolve";
+import { sendOtpEmail, sendPasswordResetEmail } from "@/lib/email";
+import { storeOtp, verifyOtp, consumeOtp } from "@/lib/otp";
 
 interface AuthResult {
   error?: string;
@@ -14,53 +15,74 @@ interface AuthResult {
   redirectTo?: string;
   message?: string;
   otpSent?: boolean;
+  email?: string;
 }
 
-async function resolveUsernameToEmail(username: string): Promise<string | null> {
-  const trimmed = username.trim();
-  if (!trimmed) return null;
-  if (trimmed.includes("@")) return trimmed.toLowerCase();
+
+export async function sendPasswordResetOtp(formData: FormData): Promise<AuthResult> {
+  const identifier = (formData.get("identifier") as string)?.trim();
+  if (!identifier) return { error: "Email or roll number is required." };
+
+  const email = await resolveUsernameToEmail(identifier);
+  if (!email) return { error: "No account found with that email or roll number." };
 
   const admin = createAdminClient();
+  const { data: user } = await admin.from("users").select("id").eq("email", email).maybeSingle();
+  if (!user) return { error: "No account found with that email or roll number." };
 
-  const { data: byRoll } = await admin
-    .from("users")
-    .select("email")
-    .eq("roll_number", trimmed)
-    .maybeSingle();
-  if (byRoll?.email) return byRoll.email;
+  try {
+    const otp = await storeOtp(email, { purpose: "password_reset", email });
+    const mail = await sendPasswordResetEmail(email, otp);
+    if (!mail.ok) {
+      if (process.env.NODE_ENV === "development" && "dev" in mail && mail.dev) {
+        return { success: true, otpSent: true, message: `Dev mode: reset code is ${otp}`, email };
+      }
+      return { error: mail.error ?? "Could not send reset email." };
+    }
+    return { success: true, otpSent: true, message: "Password reset code sent to your email.", email };
+  } catch (error) {
+    return { error: toActionErrorMessage(error, "Could not send reset code.") };
+  }
+}
 
-  const { data: byMemberId } = await admin
-    .from("users")
-    .select("email")
-    .eq("member_id", trimmed.toUpperCase())
-    .maybeSingle();
-  if (byMemberId?.email) return byMemberId.email;
+export async function resetPasswordWithOtp(formData: FormData): Promise<AuthResult> {
+  const email = (formData.get("email") as string)?.trim().toLowerCase();
+  const otp = (formData.get("otp") as string)?.trim();
+  const password = formData.get("password") as string;
+  const confirmPassword = formData.get("confirm_password") as string;
 
-  const { data: byRollBio } = await admin
-    .from("users")
-    .select("email")
-    .ilike("bio", `%Roll No: ${trimmed}%`)
-    .maybeSingle();
-  if (byRollBio?.email) return byRollBio.email;
+  if (!email || !otp || !password) return { error: "All fields are required." };
+  if (password.length < 8) return { error: "Password must be at least 8 characters." };
+  if (password !== confirmPassword) return { error: "Passwords do not match." };
 
-  const { data: users } = await admin.from("users").select("email");
-  const localMatch = users?.find(
-    (u) => u.email.split("@")[0].toLowerCase() === trimmed.toLowerCase(),
-  );
-  if (localMatch?.email) return localMatch.email;
+  const verified = await verifyOtp(email, otp);
+  if (!verified.ok) return { error: verified.error };
 
-  if (process.env.NODE_ENV === "development") {
-    const demoEmail = `${trimmed.toLowerCase()}@demo.kitsic`;
-    const { data: demoUser } = await admin
-      .from("users")
-      .select("email")
-      .eq("email", demoEmail)
-      .maybeSingle();
-    if (demoUser?.email) return demoUser.email;
+  const payload = verified.payload;
+  if (payload.purpose !== "password_reset") {
+    return { error: "Invalid reset code. Request a new password reset." };
   }
 
-  return null;
+  const admin = createAdminClient();
+  const { data: user } = await admin.from("users").select("id").eq("email", email).maybeSingle();
+  if (!user) return { error: "Account not found." };
+
+  const { error: updateError } = await admin.auth.admin.updateUserById(user.id, { password });
+  if (updateError) return { error: updateError.message };
+
+  await consumeOtp(verified.otpId);
+
+  const headerList = await headers();
+  await logAuditEvent({
+    userId: user.id,
+    action: "auth.password_reset",
+    entityType: "user",
+    entityId: user.id,
+    ipAddress: headerList.get("x-forwarded-for"),
+    userAgent: headerList.get("user-agent"),
+  });
+
+  return { success: true, message: "Password updated. You can sign in now.", redirectTo: "/login" };
 }
 
 export async function signInWithUsername(formData: FormData): Promise<AuthResult> {
@@ -178,6 +200,81 @@ export async function signUpWithEmail(formData: FormData): Promise<AuthResult> {
   const otp = (formData.get("otp") as string)?.trim();
   if (otp) return completeSignupWithOtp(formData);
   return sendSignupOtp(formData);
+}
+
+export async function sendLeadershipSignupOtp(formData: FormData): Promise<AuthResult> {
+  const fullName = (formData.get("full_name") as string)?.trim();
+  const email = (formData.get("email") as string)?.trim().toLowerCase();
+  const branch = (formData.get("branch") as string)?.trim();
+  const rollNumber = (formData.get("roll_number") as string)?.trim();
+  const phone = (formData.get("phone") as string)?.trim();
+  const password = formData.get("password") as string;
+  const confirmPassword = formData.get("confirm_password") as string;
+  const roleSlug = (formData.get("role_slug") as string)?.trim();
+  const inviteCode = (formData.get("invite_code") as string)?.trim();
+
+  if (!fullName || !email || !phone || !password || !roleSlug || !inviteCode) {
+    return { error: "All required fields must be filled." };
+  }
+  if (password.length < 8) return { error: "Password must be at least 8 characters." };
+  if (password !== confirmPassword) return { error: "Passwords do not match." };
+
+  const { verifyLeadershipInviteCode } = await import("@/lib/leadership-invite");
+  const invite = await verifyLeadershipInviteCode(roleSlug, inviteCode);
+  if (!invite.ok) return { error: invite.error };
+
+  const admin = createAdminClient();
+  const { data: existing } = await admin
+    .from("users")
+    .select("id")
+    .eq("email", email)
+    .maybeSingle();
+
+  if (existing) {
+    const { data: roles } = await admin
+      .from("user_roles")
+      .select("roles(slug)")
+      .eq("user_id", existing.id);
+    const slugs = (roles ?? []).map((r) => {
+      const role = r.roles as { slug: string } | { slug: string }[] | null;
+      return Array.isArray(role) ? role[0]?.slug : role?.slug;
+    });
+    if (slugs.some((s) => s && s !== "member")) {
+      return { error: "This email already has a leadership account." };
+    }
+  }
+
+  try {
+    const otp = await storeOtp(email, {
+      fullName,
+      email,
+      branch,
+      rollNumber,
+      phone,
+      password,
+      role_slug: roleSlug,
+      invite_code: inviteCode.toUpperCase(),
+      signup_type: "leadership",
+    });
+    const mail = await sendOtpEmail(email, otp);
+    if (!mail.ok) {
+      return { error: mail.error ?? "Could not send verification email." };
+    }
+    return { success: true, otpSent: true, message: "Verification code sent to your email." };
+  } catch (error) {
+    return { error: toActionErrorMessage(error, "Could not send OTP.") };
+  }
+}
+
+export async function completeLeadershipSignup(formData: FormData): Promise<AuthResult> {
+  const { runCompleteLeadershipSignup } = await import("@/lib/complete-leadership-signup");
+  return runCompleteLeadershipSignup(formData);
+}
+
+export async function signUpLeadership(formData: FormData): Promise<AuthResult> {
+  const otp = (formData.get("otp") as string)?.trim();
+  if (otp) return completeLeadershipSignup(formData);
+  return sendLeadershipSignupOtp(formData);
 }
 
 export async function signInWithMagicLink(formData: FormData): Promise<AuthResult> {

@@ -10,6 +10,7 @@ import type { GradeResult, LearningQuestion } from "@/lib/learning-types";
 import { uploadClubDocumentFile, uploadAvatarFile } from "@/lib/storage";
 import type { ActionResult } from "@/lib/actions";
 import { toActionErrorMessage } from "@/lib/action-error";
+import { ACTIVE_HEAD_ROLE_SLUGS } from "@/lib/leadership-roles";
 
 function revalidate(...paths: string[]) {
   for (const path of paths) revalidatePath(path);
@@ -358,8 +359,9 @@ export async function sendLeadershipMessage(formData: FormData): Promise<ActionR
   const body = (formData.get("body") as string)?.trim();
   if (!recipientRole || !subject || !body) return { error: "All fields are required" };
 
-  const allowed = ["president", "vice_president", "secretary", "treasurer"];
-  if (!allowed.includes(recipientRole)) return { error: "Invalid recipient" };
+  if (!ACTIVE_HEAD_ROLE_SLUGS.includes(recipientRole as (typeof ACTIVE_HEAD_ROLE_SLUGS)[number])) {
+    return { error: "Invalid recipient" };
+  }
 
   const { error } = await supabase.from("leadership_messages").insert({
     sender_id: user.id,

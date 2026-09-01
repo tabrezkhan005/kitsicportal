@@ -9,6 +9,8 @@ import { ArrowRight, Check, ChevronDown, Sparkles } from "lucide-react";
 import {
   signInWithUsername,
   sendSignupOtp,
+  sendPasswordResetOtp,
+  resetPasswordWithOtp,
 } from "@/features/auth/actions";
 import { toActionErrorMessage } from "@/lib/action-error";
 
@@ -32,7 +34,7 @@ async function completeSignupViaApi(formData: FormData) {
   return payload ?? { error: "Signup failed with no response." };
 }
 
-type AuthMode = "signin" | "signup";
+type AuthMode = "signin" | "signup" | "forgot";
 
 const BRANCHES = ["CSM", "CSE", "ECE", "IT", "EEE", "CSD"] as const;
 
@@ -64,18 +66,23 @@ export default function AuthSectionOne() {
   const [mode, setMode] = useState<AuthMode>(initialMode);
   const [branch, setBranch] = useState("");
   const [signupEmail, setSignupEmail] = useState("");
+  const [forgotEmail, setForgotEmail] = useState("");
   const [otpStep, setOtpStep] = useState(false);
+  const [forgotOtpStep, setForgotOtpStep] = useState(false);
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
 
   const isSignUp = mode === "signup";
+  const isForgot = mode === "forgot";
 
   function switchMode(next: AuthMode) {
     setMode(next);
     setBranch("");
     setSignupEmail("");
+    setForgotEmail("");
     setOtpStep(false);
+    setForgotOtpStep(false);
     setError(null);
     setMessage(null);
   }
@@ -90,6 +97,32 @@ export default function AuthSectionOne() {
 
     startTransition(async () => {
       try {
+        if (isForgot) {
+          if (!forgotOtpStep) {
+            const result = await sendPasswordResetOtp(formData);
+            if (result?.error) {
+              setError(toActionErrorMessage(result.error, "Could not send reset code."));
+              return;
+            }
+            if (result.email) setForgotEmail(result.email);
+            setForgotOtpStep(true);
+            setMessage(result.message ?? "Reset code sent.");
+            return;
+          }
+
+          const result = await resetPasswordWithOtp(formData);
+          if (result?.error) {
+            setError(toActionErrorMessage(result.error, "Could not reset password."));
+            return;
+          }
+          setMessage(result.message ?? "Password updated.");
+          if (result.redirectTo) {
+            switchMode("signin");
+            setMessage("Password updated. Sign in with your new password.");
+          }
+          return;
+        }
+
         if (isSignUp && !otpStep) {
           const email = (formData.get("email") as string)?.trim();
           const result = await sendSignupOtp(formData);
@@ -171,32 +204,45 @@ export default function AuthSectionOne() {
               </div>
 
               <div className="relative mb-4 flex rounded-xl border border-primary/10 bg-[#f8fafc] p-1">
-                <motion.span
-                  layout
-                  transition={{ type: "spring", stiffness: 400, damping: 30 }}
-                  className="absolute bottom-1 top-1 w-[calc(50%-4px)] rounded-lg bg-primary shadow-sm"
-                  style={{ left: isSignUp ? "calc(50% + 2px)" : "4px" }}
-                />
-                <button
-                  type="button"
-                  onClick={() => switchMode("signin")}
-                  className={[
-                    "relative z-10 flex-1 rounded-lg py-2 text-sm font-semibold transition-colors duration-300 font-ui",
-                    !isSignUp ? "text-white" : "text-primary/50 hover:text-primary/80",
-                  ].join(" ")}
-                >
-                  Sign in
-                </button>
-                <button
-                  type="button"
-                  onClick={() => switchMode("signup")}
-                  className={[
-                    "relative z-10 flex-1 rounded-lg py-2 text-sm font-semibold transition-colors duration-300 font-ui",
-                    isSignUp ? "text-white" : "text-primary/50 hover:text-primary/80",
-                  ].join(" ")}
-                >
-                  Sign up
-                </button>
+                {!isForgot && (
+                  <>
+                    <motion.span
+                      layout
+                      transition={{ type: "spring", stiffness: 400, damping: 30 }}
+                      className="absolute bottom-1 top-1 w-[calc(50%-4px)] rounded-lg bg-primary shadow-sm"
+                      style={{ left: isSignUp ? "calc(50% + 2px)" : "4px" }}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => switchMode("signin")}
+                      className={[
+                        "relative z-10 flex-1 rounded-lg py-2 text-sm font-semibold transition-colors duration-300 font-ui",
+                        !isSignUp ? "text-white" : "text-primary/50 hover:text-primary/80",
+                      ].join(" ")}
+                    >
+                      Sign in
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => switchMode("signup")}
+                      className={[
+                        "relative z-10 flex-1 rounded-lg py-2 text-sm font-semibold transition-colors duration-300 font-ui",
+                        isSignUp ? "text-white" : "text-primary/50 hover:text-primary/80",
+                      ].join(" ")}
+                    >
+                      Sign up
+                    </button>
+                  </>
+                )}
+                {isForgot && (
+                  <button
+                    type="button"
+                    onClick={() => switchMode("signin")}
+                    className="w-full rounded-lg py-2 text-sm font-semibold text-primary/70 transition-colors hover:text-primary font-ui"
+                  >
+                    ← Back to sign in
+                  </button>
+                )}
               </div>
 
               <AnimatePresence mode="wait">
@@ -209,12 +255,14 @@ export default function AuthSectionOne() {
                   className="mb-2 text-center sm:mb-3"
                 >
                   <h1 className="auth-title font-auth-display text-xl font-extrabold leading-tight tracking-[-0.03em] text-primary sm:text-[1.75rem]">
-                    {isSignUp ? "Join the club" : "Welcome back"}
+                    {isForgot ? "Reset password" : isSignUp ? "Join the club" : "Welcome back"}
                   </h1>
                   <p className="auth-subtitle mt-1 font-body text-xs leading-relaxed text-primary/55 sm:text-sm">
-                    {isSignUp
-                      ? "Create your account to access the Innovation Club dashboard"
-                      : "Sign in to your KITSIC dashboard"}
+                    {isForgot
+                      ? "We will email you a code to set a new password"
+                      : isSignUp
+                        ? "Create your account to access the Innovation Club dashboard"
+                        : "Sign in to your KITSIC dashboard"}
                   </p>
                 </motion.div>
               </AnimatePresence>
@@ -233,7 +281,30 @@ export default function AuthSectionOne() {
                     transition={{ duration: 0.28, ease: [0.22, 1, 0.36, 1] }}
                     className="space-y-2 pb-1"
                   >
-                    {isSignUp ? (
+                    {isForgot ? (
+                      <div className="space-y-2">
+                        {!forgotOtpStep ? (
+                          <FieldBox
+                            label="Email or roll number"
+                            name="identifier"
+                            required
+                            placeholder="you@college.edu or 21BCE1234"
+                            mono
+                            compact
+                          />
+                        ) : (
+                          <>
+                            <p className="rounded-lg border border-[var(--dashboard-border)] bg-[#f3f6f9] px-3 py-2 font-body text-xs text-muted">
+                              Reset code sent to <span className="font-semibold text-primary">{forgotEmail}</span>
+                            </p>
+                            <input type="hidden" name="email" value={forgotEmail} />
+                            <FieldBox label="Reset code" name="otp" required placeholder="6-digit code" mono compact />
+                            <FieldBox label="New password" name="password" type="password" required compact />
+                            <FieldBox label="Confirm new password" name="confirm_password" type="password" required compact />
+                          </>
+                        )}
+                      </div>
+                    ) : isSignUp ? (
                       <div className={!otpStep ? "auth-signup-grid space-y-2 sm:space-y-0" : "space-y-2"}>
                         {!otpStep ? (
                           <>
@@ -276,6 +347,15 @@ export default function AuthSectionOne() {
                       <>
                         <FieldBox label="Username" name="username" required placeholder="Roll no. or email" mono compact />
                         <FieldBox label="Password" name="password" type="password" required compact />
+                        <p className="text-right">
+                          <button
+                            type="button"
+                            onClick={() => switchMode("forgot")}
+                            className="font-body text-xs font-semibold text-accent underline-offset-2 hover:underline"
+                          >
+                            Forgot password?
+                          </button>
+                        </p>
                       </>
                     )}
 
@@ -304,7 +384,15 @@ export default function AuthSectionOne() {
                     "Please wait…"
                   ) : (
                     <>
-                      {isSignUp ? (otpStep ? "Verify & create account" : "Send verification code") : "Sign in"}
+                      {isForgot
+                        ? forgotOtpStep
+                          ? "Update password"
+                          : "Send reset code"
+                        : isSignUp
+                          ? otpStep
+                            ? "Verify & create account"
+                            : "Send verification code"
+                          : "Sign in"}
                       <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" />
                     </>
                   )}
@@ -312,6 +400,14 @@ export default function AuthSectionOne() {
                 <p className="auth-institute mt-2 text-center font-body text-[10px] text-primary/40">
                   KKR &amp; KSR Institute of Technology and Sciences
                 </p>
+                {!isForgot && (
+                  <p className="mt-3 text-center font-body text-xs text-primary/50">
+                    Leadership head?{" "}
+                    <a href="/signup/leadership" className="font-semibold text-accent underline-offset-2 hover:underline">
+                      Register here
+                    </a>
+                  </p>
+                )}
               </div>
             </form>
           </div>

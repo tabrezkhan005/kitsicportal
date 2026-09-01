@@ -20,13 +20,15 @@ import {
   Search,
   Shield,
   TrendingUp,
+  Trash2,
   UserPlus,
   Users,
   X,
 } from "lucide-react";
 import { EmptyState } from "@/components/empty-state";
 import { PageHeader } from "@/components/page-header";
-import { assignMemberRole, issueCertificate } from "@/lib/actions";
+import { assignMemberRole, deleteMember, issueCertificate } from "@/lib/actions";
+import { userHasHeadRole } from "@/lib/leadership-roles";
 import { Modal } from "@/components/modal";
 import { CreateForm } from "@/components/create-form";
 import { MembersClubHub } from "@/features/members/members-club-hub";
@@ -39,6 +41,9 @@ interface Member {
   avatar_url: string | null;
   avatar_color?: string;
   member_id?: string | null;
+  roll_number?: string | null;
+  branch?: string | null;
+  phone?: string | null;
   skills?: string[];
   created_at: string;
   department: string | null;
@@ -80,16 +85,16 @@ interface MembersDashboardProps {
   hub?: MembersHubData;
   canAssignRoles?: boolean;
   canIssueCertificates?: boolean;
+  canDeleteMembers?: boolean;
+  currentUserId?: string;
 }
-
-const LEADERSHIP_SLUGS = new Set(["president", "vice_president", "secretary", "treasurer"]);
 
 function formatDate(date: string) {
   return new Date(date).toLocaleDateString("en-IN", { dateStyle: "medium" });
 }
 
 function isLeadershipMember(member: Member) {
-  return member.roleSlugs.some((slug) => LEADERSHIP_SLUGS.has(slug));
+  return userHasHeadRole(member.roleSlugs);
 }
 
 export function MembersDashboard({
@@ -99,6 +104,8 @@ export function MembersDashboard({
   hub,
   canAssignRoles = false,
   canIssueCertificates = false,
+  canDeleteMembers = false,
+  currentUserId,
 }: MembersDashboardProps) {
   const router = useRouter();
   const [search, setSearch] = useState("");
@@ -106,6 +113,8 @@ export function MembersDashboard({
   const [selectedMember, setSelectedMember] = useState<Member | null>(null);
   const [roleMember, setRoleMember] = useState<Member | null>(null);
   const [certMember, setCertMember] = useState<Member | null>(null);
+  const [deleteMemberTarget, setDeleteMemberTarget] = useState<Member | null>(null);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
   const [roleError, setRoleError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
 
@@ -140,6 +149,22 @@ export function MembersDashboard({
     }
     return options;
   }, [members, roles, stats.leadership]);
+
+  function handleDeleteMember() {
+    if (!deleteMemberTarget) return;
+    setDeleteError(null);
+
+    startTransition(async () => {
+      const result = await deleteMember(deleteMemberTarget.id);
+      if (result.error) {
+        setDeleteError(result.error);
+        return;
+      }
+      setDeleteMemberTarget(null);
+      setSelectedMember(null);
+      router.refresh();
+    });
+  }
 
   function handleAssignRole(roleSlug: string) {
     if (!roleMember) return;
@@ -266,7 +291,7 @@ export function MembersDashboard({
                     <TableHead className="font-ui">Role</TableHead>
                     <TableHead className="font-ui">Contribution</TableHead>
                     <TableHead className="font-ui">Joined</TableHead>
-                    {(canAssignRoles || canIssueCertificates) && (
+                    {(canAssignRoles || canIssueCertificates || canDeleteMembers) && (
                       <TableHead className="font-ui text-right">Actions</TableHead>
                     )}
                   </TableRow>
@@ -330,7 +355,7 @@ export function MembersDashboard({
                       <TableCell className="font-body text-sm text-muted">
                         {formatDate(member.created_at)}
                       </TableCell>
-                      {(canAssignRoles || canIssueCertificates) && (
+                      {(canAssignRoles || canIssueCertificates || canDeleteMembers) && (
                         <TableCell className="text-right">
                           <div
                             className="flex flex-wrap justify-end gap-2"
@@ -362,6 +387,22 @@ export function MembersDashboard({
                               >
                                 <Award className="h-3.5 w-3.5" />
                                 Certificate
+                              </Button>
+                            )}
+                            {canDeleteMembers && member.id !== currentUserId && (
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                disabled={isPending}
+                                className="font-ui rounded-lg text-red-600 hover:bg-red-50 hover:text-red-700"
+                                onClick={() => {
+                                  setDeleteError(null);
+                                  setDeleteMemberTarget(member);
+                                }}
+                              >
+                                <Trash2 className="h-3.5 w-3.5" />
+                                Delete
                               </Button>
                             )}
                           </div>
@@ -427,9 +468,14 @@ export function MembersDashboard({
                   Department · {selectedMember.department}
                 </p>
               )}
-              <p className="mt-1 font-body text-sm text-muted">
-                Joined · {formatDate(selectedMember.created_at)}
-              </p>
+              <div className="mt-4 space-y-2 rounded-xl border border-[var(--dashboard-border-subtle)] bg-[#f8fafc] p-4">
+                <DetailRow label="Email" value={selectedMember.email} />
+                {selectedMember.phone && <DetailRow label="Phone" value={selectedMember.phone} />}
+                {selectedMember.roll_number && <DetailRow label="Roll number" value={selectedMember.roll_number} />}
+                {selectedMember.branch && <DetailRow label="Branch" value={selectedMember.branch} />}
+                {selectedMember.member_id && <DetailRow label="Member ID" value={selectedMember.member_id} />}
+                <DetailRow label="Joined" value={formatDate(selectedMember.created_at)} />
+              </div>
               {selectedMember.skills && selectedMember.skills.length > 0 && (
                 <div className="mt-4 flex flex-wrap gap-1.5">
                   {selectedMember.skills.map((skill) => (
@@ -447,7 +493,7 @@ export function MembersDashboard({
                 <DetailStat label="Task rate" value={`${selectedMember.taskCompletionRate}%`} />
               </div>
 
-              {(canAssignRoles || canIssueCertificates) && (
+              {(canAssignRoles || canIssueCertificates || canDeleteMembers) && (
                 <div className="mt-6 flex flex-col gap-2">
                   {canAssignRoles && (
                     <Button
@@ -472,6 +518,20 @@ export function MembersDashboard({
                     >
                       Issue certificate
                       <Award className="h-4 w-4" />
+                    </Button>
+                  )}
+                  {canDeleteMembers && selectedMember.id !== currentUserId && (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="w-full justify-between border-red-200 font-ui text-red-600 hover:bg-red-50 rounded-xl"
+                      onClick={() => {
+                        setDeleteError(null);
+                        setDeleteMemberTarget(selectedMember);
+                      }}
+                    >
+                      Delete member
+                      <Trash2 className="h-4 w-4" />
                     </Button>
                   )}
                 </div>
@@ -550,6 +610,60 @@ export function MembersDashboard({
           />
         )}
       </Modal>
+
+      <Modal
+        open={!!deleteMemberTarget}
+        onOpenChange={(open) => {
+          if (!open) {
+            setDeleteMemberTarget(null);
+            setDeleteError(null);
+          }
+        }}
+        title={`Delete member — ${deleteMemberTarget?.full_name ?? deleteMemberTarget?.email}`}
+      >
+        <p className="mb-4 font-body text-sm text-muted">
+          This permanently removes the member account, login access, roles, attendance, tasks, notifications, and all related data. This cannot be undone.
+        </p>
+        {deleteMemberTarget && (
+          <div className="mb-4 space-y-1 rounded-xl border border-[var(--dashboard-border-subtle)] bg-[#f8fafc] p-4 font-body text-sm">
+            <p><span className="text-muted">Name:</span> {deleteMemberTarget.full_name ?? "—"}</p>
+            <p><span className="text-muted">Email:</span> {deleteMemberTarget.email}</p>
+            {deleteMemberTarget.roll_number && (
+              <p><span className="text-muted">Roll:</span> {deleteMemberTarget.roll_number}</p>
+            )}
+            {deleteMemberTarget.member_id && (
+              <p><span className="text-muted">Member ID:</span> {deleteMemberTarget.member_id}</p>
+            )}
+          </div>
+        )}
+        {deleteError && (
+          <p className="mb-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 font-body text-sm text-red-600">
+            {deleteError}
+          </p>
+        )}
+        <div className="flex justify-end gap-2">
+          <Button type="button" variant="outline" className="font-ui" onClick={() => setDeleteMemberTarget(null)}>
+            Cancel
+          </Button>
+          <Button
+            type="button"
+            className="font-ui bg-red-600 text-white hover:bg-red-700"
+            disabled={isPending}
+            onClick={handleDeleteMember}
+          >
+            Delete permanently
+          </Button>
+        </div>
+      </Modal>
+    </div>
+  );
+}
+
+function DetailRow({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex items-start justify-between gap-4">
+      <span className="font-ui text-xs font-semibold uppercase tracking-wide text-muted">{label}</span>
+      <span className="text-right font-body text-sm text-primary">{value}</span>
     </div>
   );
 }

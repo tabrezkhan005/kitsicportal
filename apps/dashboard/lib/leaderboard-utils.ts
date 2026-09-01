@@ -1,14 +1,10 @@
+import { ACTIVE_HEAD_ROLE_SLUGS } from "@/lib/leadership-roles";
+
 /** Roles hidden from the member-facing leaderboard (leadership & department heads) */
 export const LEADERBOARD_EXCLUDED_ROLE_SLUGS = [
-  "president",
-  "vice_president",
-  "secretary",
-  "treasurer",
-  "technical_head",
+  ...ACTIVE_HEAD_ROLE_SLUGS,
   "social_media_head",
-  "resource_head",
-  "logistics_head",
-  "student_lead",
+  "treasurer",
 ] as const;
 
 export type LeaderboardExcludedRole = (typeof LEADERBOARD_EXCLUDED_ROLE_SLUGS)[number];

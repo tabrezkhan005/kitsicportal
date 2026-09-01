@@ -74,6 +74,18 @@
   background: rgba(3, 53, 101, 0.18);
 }
 
+@media (min-width: 640px) {
+  .auth-signup-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.5rem;
+  }
+
+  .auth-signup-grid .auth-span-2 {
+    grid-column: span 2;
+  }
+}
+
 @media (max-height: 860px) {
   .auth-shell {
     min-height: 100dvh;

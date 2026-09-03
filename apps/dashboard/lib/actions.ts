@@ -204,8 +204,13 @@ export async function createMeeting(formData: FormData): Promise<ActionResult> {
       googleEventId = created.googleEventId;
       googleMeetCode = created.googleMeetCode;
     } catch (error) {
-      const message = error instanceof Error ? error.message : "Failed to create Google Meet";
-      return { error: message };
+      const raw = error instanceof Error ? error.message : "Failed to create Google Meet";
+      if (raw.includes("invalid_grant") || raw.includes("Google connection expired")) {
+        return {
+          error: "Google connection expired. Open Settings, reconnect Google Calendar, then try again.",
+        };
+      }
+      return { error: raw };
     }
   }
 

@@ -95,6 +95,38 @@ export async function getAuthenticatedGoogleClient() {
     await saveGoogleTokens(next);
   });
 
+  // Proactively refresh so we surface invalid_grant before Calendar API calls.
+  try {
+    const needsRefresh =
+      !stored.expiry_date
+      || stored.expiry_date < Date.now() + 60_000
+      || !stored.access_token;
+
+    if (needsRefresh) {
+      const { credentials } = await oauth2Client.refreshAccessToken();
+      oauth2Client.setCredentials(credentials);
+      await saveGoogleTokens({
+        ...stored,
+        access_token: credentials.access_token ?? stored.access_token,
+        refresh_token: credentials.refresh_token ?? stored.refresh_token,
+        expiry_date: credentials.expiry_date ?? stored.expiry_date,
+      });
+    }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    const isInvalidGrant =
+      message.includes("invalid_grant")
+      || (typeof error === "object" && error !== null && "response" in error && JSON.stringify(error).includes("invalid_grant"));
+
+    if (isInvalidGrant) {
+      await clearGoogleTokens();
+      throw new Error(
+        "Google connection expired (invalid_grant). Go to Settings → Disconnect/Reconnect Google Calendar, then schedule again.",
+      );
+    }
+    throw error instanceof Error ? error : new Error(message);
+  }
+
   return oauth2Client;
 }
 

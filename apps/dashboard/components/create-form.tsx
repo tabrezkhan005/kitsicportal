@@ -6,7 +6,7 @@ import { useState, useTransition } from "react";
 import { toActionErrorMessage } from "@/lib/action-error";
 
 interface CreateFormProps {
-  action: (formData: FormData) => Promise<{ success?: boolean; error?: string; data?: Record<string, unknown> }>;
+  action: (formData: FormData) => Promise<{ success?: boolean; error?: string; message?: string; data?: Record<string, unknown> }>;
   fields: Array<{
     name: string;
     label: string;
@@ -17,17 +17,19 @@ interface CreateFormProps {
   }>;
   hiddenValues?: Record<string, string>;
   submitLabel?: string;
-  onSuccess?: (result?: Record<string, unknown>) => void;
+  onSuccess?: (result?: { message?: string; data?: Record<string, unknown> }) => void;
 }
 
 export function CreateForm({ action, fields, hiddenValues, submitLabel = "Create", onSuccess }: CreateFormProps) {
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
+  const [message, setMessage] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
 
   function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setError(null);
+    setMessage(null);
     const formData = new FormData(e.currentTarget);
 
     startTransition(async () => {
@@ -37,7 +39,8 @@ export function CreateForm({ action, fields, hiddenValues, submitLabel = "Create
           setError(result.error);
           return;
         }
-        onSuccess?.(result.data);
+        if (result.message) setMessage(result.message);
+        onSuccess?.({ message: result.message, data: result.data });
         router.refresh();
         (e.target as HTMLFormElement).reset();
       } catch (err) {
@@ -93,6 +96,7 @@ export function CreateForm({ action, fields, hiddenValues, submitLabel = "Create
       ))}
 
       {error && <p className="text-sm text-danger">{error}</p>}
+      {message && <p className="rounded-lg border border-teal-200 bg-teal-50 px-3 py-2 text-sm text-teal-700">{message}</p>}
 
       <Button type="submit" disabled={isPending} className="w-full">
         {isPending ? "Saving…" : submitLabel}

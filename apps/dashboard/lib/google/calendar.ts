@@ -1,6 +1,5 @@
 import "server-only";
 
-import { createAdminClient } from "@kitsic/database";
 import { google } from "googleapis";
 import { randomBytes } from "node:crypto";
 import { getAuthenticatedGoogleClient } from "./client";
@@ -12,17 +11,11 @@ export interface CreateGoogleMeetingResult {
   googleMeetCode: string;
 }
 
-export async function getClubMemberEmails(): Promise<string[]> {
-  const supabase = createAdminClient();
-  const { data } = await supabase
-    .from("users")
-    .select("email")
-    .is("deleted_at", null)
-    .order("email");
-
-  return (data ?? []).map((row) => row.email).filter(Boolean);
-}
-
+/**
+ * Create a Google Calendar event with a Meet link.
+ * Invites are sent by the portal SMTP to all members — we do not add every
+ * member as a Google Calendar attendee (that hits Google limits / failures).
+ */
 export async function createGoogleCalendarMeeting(input: {
   title: string;
   description?: string | null;
@@ -31,24 +24,34 @@ export async function createGoogleCalendarMeeting(input: {
 }): Promise<CreateGoogleMeetingResult> {
   const auth = await getAuthenticatedGoogleClient();
   const calendar = google.calendar({ version: "v3", auth });
-  const attendeeEmails = await getClubMemberEmails();
+
+  const startIso = new Date(input.startsAt).toISOString();
+  const endIso = new Date(input.endsAt).toISOString();
+
+  if (Number.isNaN(new Date(startIso).getTime()) || Number.isNaN(new Date(endIso).getTime())) {
+    throw new Error("Invalid meeting start or end time.");
+  }
 
   const event = await calendar.events.insert({
     calendarId: "primary",
     conferenceDataVersion: 1,
-    sendUpdates: "all",
+    sendUpdates: "none",
     requestBody: {
       summary: input.title,
-      description: input.description ?? undefined,
+      description: [
+        input.description ?? "",
+        "",
+        "All club members are invited via the KITSIC portal email.",
+        `Portal: ${process.env.NEXT_PUBLIC_APP_URL ?? "https://portal.kitsic.in"}/meetings`,
+      ].filter(Boolean).join("\n"),
       start: {
-        dateTime: new Date(input.startsAt).toISOString(),
+        dateTime: startIso,
         timeZone: "Asia/Kolkata",
       },
       end: {
-        dateTime: new Date(input.endsAt).toISOString(),
+        dateTime: endIso,
         timeZone: "Asia/Kolkata",
       },
-      attendees: attendeeEmails.map((email) => ({ email })),
       conferenceData: {
         createRequest: {
           requestId: `${Date.now()}-${randomBytes(4).toString("hex")}`,
@@ -64,7 +67,7 @@ export async function createGoogleCalendarMeeting(input: {
     ?? null;
 
   if (!meetLink || !event.data.id) {
-    throw new Error("Google Calendar did not return a Meet link.");
+    throw new Error("Google Calendar did not return a Meet link. Reconnect Google in Settings and try again.");
   }
 
   const googleMeetCode = parseMeetCode(meetLink);
@@ -85,6 +88,6 @@ export async function cancelGoogleCalendarMeeting(googleEventId: string): Promis
   await calendar.events.delete({
     calendarId: "primary",
     eventId: googleEventId,
-    sendUpdates: "all",
+    sendUpdates: "none",
   });
 }

@@ -31,6 +31,7 @@ interface MeetingsListProps {
 export function MeetingsList({ meetings, canManage = false, googleConnected = false }: MeetingsListProps) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
+  const [scheduleMessage, setScheduleMessage] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
 
   function handleCancel(meetingId: string) {
@@ -87,6 +88,12 @@ export function MeetingsList({ meetings, canManage = false, googleConnected = fa
             Connect in Settings
           </Link>{" "}
           to auto-create Meet links and sync attendance.
+        </div>
+      )}
+
+      {scheduleMessage && (
+        <div className="rounded-[var(--radius-md)] border border-teal-500/30 bg-teal-500/5 px-4 py-3 text-sm text-teal-800">
+          {scheduleMessage}
         </div>
       )}
 
@@ -169,7 +176,10 @@ export function MeetingsList({ meetings, canManage = false, googleConnected = fa
       <Modal open={open} onOpenChange={setOpen} title="Schedule meeting">
         <CreateForm
           action={createMeeting}
-          onSuccess={() => setOpen(false)}
+          onSuccess={(result) => {
+            setOpen(false);
+            setScheduleMessage(result?.message ?? "Meeting scheduled. Invite emails are being sent to all members.");
+          }}
           submitLabel="Schedule meeting"
           fields={createFields}
         />

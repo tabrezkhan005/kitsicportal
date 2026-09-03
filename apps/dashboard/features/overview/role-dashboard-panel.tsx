@@ -10,6 +10,7 @@ interface RoleDashboardPanelProps {
     upcomingEventCount: number;
     attendanceRate: number;
     meetingCount?: number;
+    financeBalance?: number;
   };
 }
 
@@ -24,6 +25,9 @@ function resolveStatValue(
     case "upcomingEventCount": return String(stats.upcomingEventCount);
     case "attendanceRate": return `${stats.attendanceRate}%`;
     case "meetingCount": return String(stats.meetingCount ?? 0);
+    case "financeBalance": return stats.financeBalance !== undefined
+      ? new Intl.NumberFormat("en-IN", { style: "currency", currency: "INR", maximumFractionDigits: 0 }).format(stats.financeBalance)
+      : "—";
     default: return "—";
   }
 }

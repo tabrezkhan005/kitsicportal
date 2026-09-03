@@ -5,6 +5,7 @@ import { ForbiddenPage } from "@/components/forbidden-page";
 import { MeetingsList } from "@/features/meetings/meetings-list";
 
 export const metadata = { title: "Meetings" };
+export const maxDuration = 60;
 
 export default async function MeetingsPage() {
   let user;

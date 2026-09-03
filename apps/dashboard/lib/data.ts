@@ -1,7 +1,7 @@
 import { createAdminClient } from "@kitsic/database";
 import { getAvatarColorForUser } from "@/lib/avatar-color";
 import { filterLeaderboardForViewer } from "@/lib/leaderboard-utils";
-import { ACTIVE_HEAD_ROLE_SLUGS } from "@/lib/leadership-roles";
+import { ACTIVE_HEAD_ROLE_SLUGS, userHasHeadRole } from "@/lib/leadership-roles";
 import { getBoardCardStats, getTaskBoardFull } from "@/lib/board-data";
 
 export async function getDashboardStats() {
@@ -280,6 +280,22 @@ export async function getMembersPageData() {
   };
 
   return { members, roles, stats };
+}
+
+export async function getLeadershipRoster() {
+  const { members } = await getMembersPageData();
+  return members
+    .filter((member) => userHasHeadRole(member.roleSlugs))
+    .map((member) => ({
+      id: member.id,
+      full_name: member.full_name,
+      email: member.email,
+      member_id: member.member_id,
+      roles: member.roles,
+      roleSlugs: member.roleSlugs,
+      avatar_url: member.avatar_url,
+      avatar_color: member.avatar_color,
+    }));
 }
 
 export async function getMembers() {

@@ -3,6 +3,7 @@
 import { requirePermission, getSessionUser } from "@kitsic/auth";
 import { createAdminClient, logAuditEvent } from "@kitsic/database";
 import { revalidatePath } from "next/cache";
+import { after } from "next/server";
 import { headers } from "next/headers";
 import { randomBytes } from "node:crypto";
 import { createNotification } from "@/lib/notify";
@@ -11,6 +12,7 @@ import { sendTaskAssignedEmail } from "@/lib/email";
 export interface ActionResult {
   success?: boolean;
   error?: string;
+  message?: string;
   data?: Record<string, unknown>;
 }
 
@@ -148,9 +150,18 @@ export async function createEvent(formData: FormData): Promise<ActionResult> {
 
 // ─── Meetings ────────────────────────────────────────────────────────────────
 
+/** Parse datetime-local values as Asia/Kolkata (IST), not server UTC. */
 function parseFormDateTime(value: FormDataEntryValue | null): string | null {
   if (!value || typeof value !== "string" || !value.trim()) return null;
-  const parsed = new Date(value);
+  const trimmed = value.trim();
+  const match = trimmed.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::(\d{2}))?/);
+  if (match) {
+    const [, year, month, day, hour, minute, second = "00"] = match;
+    const iso = `${year}-${month}-${day}T${hour}:${minute}:${second}+05:30`;
+    const parsed = new Date(iso);
+    if (!Number.isNaN(parsed.getTime())) return parsed.toISOString();
+  }
+  const parsed = new Date(trimmed);
   if (Number.isNaN(parsed.getTime())) return null;
   return parsed.toISOString();
 }
@@ -213,31 +224,47 @@ export async function createMeeting(formData: FormData): Promise<ActionResult> {
 
   if (error) return { error: error.message };
 
-  try {
-    const { notifyMeetingCreated } = await import("@/lib/meeting-notifications");
-    const { momAssigneeId } = await notifyMeetingCreated({
-      meetingId: data.id,
-      title,
-      description: (formData.get("description") as string) || null,
-      startsAt,
-      endsAt,
-      meetLink,
-      createdByUserId: user.id,
-    });
+  const description = (formData.get("description") as string) || null;
 
-    if (momAssigneeId) {
-      await supabase
-        .from("meetings")
-        .update({ mom_assignee_id: momAssigneeId, mom_status: "pending" })
-        .eq("id", data.id);
+  // Send invites after the response so Vercel timeouts don't cancel the meeting create.
+  after(async () => {
+    try {
+      const { notifyMeetingCreated } = await import("@/lib/meeting-notifications");
+      const { momAssigneeId, emailsSent, memberCount, emailErrors } = await notifyMeetingCreated({
+        meetingId: data.id,
+        title,
+        description,
+        startsAt,
+        endsAt,
+        meetLink,
+        createdByUserId: user.id,
+      });
+
+      if (momAssigneeId) {
+        await supabase
+          .from("meetings")
+          .update({ mom_assignee_id: momAssigneeId, mom_status: "pending" })
+          .eq("id", data.id);
+      }
+
+      console.info(
+        `createMeeting ${data.id}: emails ${emailsSent}/${memberCount}`
+        + (emailErrors.length ? `; failures=${emailErrors.length}` : ""),
+      );
+      if (emailErrors.length > 0) {
+        console.error("createMeeting invite failures", emailErrors.slice(0, 10));
+      }
+    } catch (notifyError) {
+      console.error("createMeeting: notifications failed", notifyError);
     }
-  } catch (notifyError) {
-    console.error("createMeeting: notifications failed", notifyError);
-  }
+  });
 
   await writeAudit(user.id, "meeting.create", "meeting", data.id, { title, meetLink, googleEventId });
   revalidateDashboard("/meetings", "/calendar", `/meetings/${data.id}`);
-  return { success: true };
+  return {
+    success: true,
+    message: "Meeting scheduled. Invite emails are being sent to all registered members now.",
+  };
 }
 
 export async function cancelMeeting(meetingId: string): Promise<ActionResult> {

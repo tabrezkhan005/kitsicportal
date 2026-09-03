@@ -101,6 +101,7 @@ export function LeadershipSignupForm() {
                   height={200}
                   className="auth-logo h-16 w-auto max-w-[140px] object-contain sm:h-20 sm:max-w-[160px]"
                   priority
+                  unoptimized
                 />
                 <span className="auth-badge font-mono-brand mt-2 inline-flex items-center gap-1.5 rounded-full border border-primary/10 bg-primary/3 px-3 py-1 text-[10px] font-medium uppercase tracking-[0.18em] text-primary/60">
                   <Shield className="h-3 w-3 text-accent" />

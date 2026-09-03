@@ -1,0 +1,50 @@
+import type { DashboardSectionId } from "@/features/dashboards/dashboard-types";
+
+/** Primary content sections shown on each role's dedicated dashboard */
+export const ROLE_DASHBOARD_SECTIONS: Record<string, DashboardSectionId[]> = {
+  president: [
+    "taskPipeline",
+    "events",
+    "projects",
+    "meetings",
+    "announcements",
+    "finance",
+    "contributors",
+  ],
+  vice_president: ["taskPipeline", "events", "projects", "meetings", "contributors", "announcements"],
+  secretary: ["meetings", "announcements", "events", "taskPipeline", "contributors"],
+  joint_secretary: ["meetings", "announcements", "events", "taskPipeline"],
+  student_lead: ["myTasks", "events", "contributors", "taskPipeline"],
+  finance_head: ["finance", "events", "contributors", "announcements"],
+  treasurer: ["finance", "events", "contributors", "announcements"],
+  resource_head: ["announcements", "events", "contributors", "projects"],
+  logistics_head: ["events", "inventory", "taskPipeline", "meetings"],
+  literature_head: ["announcements", "events", "contributors", "projects"],
+  entrepreneurship_head: ["projects", "events", "taskPipeline", "contributors"],
+  technical_head: ["taskPipeline", "projects", "events", "contributors"],
+  digital_media_head: ["announcements", "events", "contributors", "meetings"],
+  social_media_head: ["announcements", "events", "contributors", "meetings"],
+  hospitality_head: ["events", "inventory", "taskPipeline", "meetings"],
+};
+
+export const PRESIDENT_MODULE_LINKS = [
+  { label: "Analytics", href: "/analytics", description: "Club metrics & trends" },
+  { label: "Calendar", href: "/calendar", description: "Full schedule" },
+  { label: "Tasks", href: "/tasks", description: "Kanban board" },
+  { label: "Whiteboard", href: "/whiteboard", description: "Collaborate live" },
+  { label: "Members", href: "/members", description: "Directory & roles" },
+  { label: "Projects", href: "/projects", description: "Club projects" },
+  { label: "Events", href: "/events", description: "Workshops & activities" },
+  { label: "Meetings", href: "/meetings", description: "Google Meet & MOM" },
+  { label: "Learning", href: "/learning", description: "Quizzes & modules" },
+  { label: "Resources", href: "/resources", description: "Roadmaps & tools" },
+  { label: "Messages", href: "/messages", description: "Leadership inbox" },
+  { label: "Attendance", href: "/attendance", description: "QR & sync" },
+  { label: "Finance", href: "/finance", description: "Budget & expenses" },
+  { label: "Inventory", href: "/inventory", description: "Stock & assets" },
+  { label: "Announcements", href: "/announcements", description: "Club notices" },
+  { label: "Reports", href: "/reports", description: "Export data" },
+  { label: "Settings", href: "/settings", description: "Integrations" },
+  { label: "Audit", href: "/audit", description: "Activity logs" },
+  { label: "Profile", href: "/profile", description: "Your account" },
+] as const;

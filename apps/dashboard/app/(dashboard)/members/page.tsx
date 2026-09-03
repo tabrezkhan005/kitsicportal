@@ -5,6 +5,7 @@ import { ForbiddenPage } from "@/components/forbidden-page";
 import { MembersDashboard } from "@/features/members/members-dashboard";
 
 export const metadata = { title: "Members" };
+export const maxDuration = 60;
 
 export default async function MembersPage() {
   let user;

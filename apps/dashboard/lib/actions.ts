@@ -474,16 +474,27 @@ export async function assignMemberRole(userId: string, roleSlug: string): Promis
 }
 
 export async function deleteMember(userId: string): Promise<ActionResult> {
-  const actor = await requirePermission("members.delete");
-  if (actor.id === userId) return { error: "You cannot delete your own account." };
+  try {
+    const actor = await requirePermission("members.delete");
+    if (actor.id === userId) return { error: "You cannot delete your own account." };
 
-  const { deleteUserCompletely } = await import("@/lib/delete-user");
-  const result = await deleteUserCompletely(userId);
-  if (!result.ok) return { error: result.error ?? "Could not delete member." };
+    const { deleteUserCompletely } = await import("@/lib/delete-user");
+    const result = await deleteUserCompletely(userId);
+    if (!result.ok) return { error: result.error ?? "Could not delete member." };
 
-  await writeAudit(actor.id, "member.delete", "user", userId);
-  revalidateDashboard("/members");
-  return { success: true };
+    try {
+      await writeAudit(actor.id, "member.delete", "user", userId);
+    } catch (auditError) {
+      console.error("deleteMember audit failed", auditError);
+    }
+
+    revalidateDashboard("/members");
+    return { success: true, message: "Member deleted permanently." };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Could not delete member.";
+    console.error("deleteMember failed", userId, message);
+    return { error: message };
+  }
 }
 
 // ─── Notifications ───────────────────────────────────────────────────────────

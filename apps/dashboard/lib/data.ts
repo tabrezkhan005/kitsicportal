@@ -259,12 +259,32 @@ async function fetchMembersBase() {
 export async function getMembersPageData() {
   const [membersBase, roles] = await Promise.all([fetchMembersBase(), getRoles()]);
 
-  const members = await Promise.all(
-    membersBase.map(async (member) => {
-      const performance = await getMemberPerformance(member.id);
-      return { ...member, ...performance };
+  // Batch performance lookups instead of N+1 (avoids /members 500 timeouts)
+  const performanceById = new Map<string, Awaited<ReturnType<typeof getMemberPerformance>>>();
+  const chunkSize = 12;
+  for (let i = 0; i < membersBase.length; i += chunkSize) {
+    const chunk = membersBase.slice(i, i + chunkSize);
+    const results = await Promise.all(
+      chunk.map(async (member) => [member.id, await getMemberPerformance(member.id)] as const),
+    );
+    for (const [id, perf] of results) performanceById.set(id, perf);
+  }
+
+  const members = membersBase.map((member) => ({
+    ...member,
+    ...(performanceById.get(member.id) ?? {
+      tasksAssigned: 0,
+      tasksCompleted: 0,
+      taskCompletionRate: 0,
+      attendanceRate: 0,
+      certificatesEarned: 0,
+      projectsJoined: 0,
+      learningPoints: 0,
+      modulesCompleted: 0,
+      avgQuizScore: 0,
+      contributionScore: 0,
     }),
-  );
+  }));
 
   const monthStart = new Date();
   monthStart.setDate(1);

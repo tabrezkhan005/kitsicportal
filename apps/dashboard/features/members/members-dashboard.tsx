@@ -90,7 +90,10 @@ interface MembersDashboardProps {
 }
 
 function formatDate(date: string) {
-  return new Date(date).toLocaleDateString("en-IN", { dateStyle: "medium" });
+  return new Date(date).toLocaleDateString("en-IN", {
+    dateStyle: "medium",
+    timeZone: "Asia/Kolkata",
+  });
 }
 
 function isLeadershipMember(member: Member) {
